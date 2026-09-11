@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduPortal - Select Your Panel</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom styles for glowing shadows */
+        .shadow-glow-blue { box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.5); }
+        .shadow-glow-green { box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.5); }
+        .shadow-glow-orange { box-shadow: 0 10px 25px -5px rgba(249, 115, 22, 0.5); }
+    </style>
+</head>
+<body class="bg-slate-900 font-sans text-slate-100 overflow-x-hidden antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Background Ambient Glows -->
+    <div class="fixed top-[-10%] left-[-10%] w-96 h-96 bg-indigo-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-float" style="animation-delay: 0s;"></div>
+    <div class="fixed top-[20%] right-[-10%] w-[30rem] h-[30rem] bg-emerald-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-30 animate-float" style="animation-delay: 2s;"></div>
+    <div class="fixed bottom-[-10%] left-[20%] w-[25rem] h-[25rem] bg-rose-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-30 animate-float" style="animation-delay: 4s;"></div>
+
+    <div class="min-h-screen flex flex-col relative z-10">
+        
+        <!-- Header / Logo Area -->
+        <header class="w-full p-6 flex justify-between items-center absolute top-0 w-full z-50">
+            <div class="flex items-center gap-2 cursor-pointer">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-graduation-cap text-white text-xl"></i>
+                </div>
+                <span class="text-xl font-bold tracking-tight text-white">Edu<span class="text-indigo-400">Portal</span></span>
+            </div>
+            <nav class="hidden md:flex gap-6 text-sm font-medium text-slate-300">
+                <a href="#" class="hover:text-white transition-colors duration-200">About Us</a>
+                <a href="#" class="hover:text-white transition-colors duration-200">Support</a>
+                <a href="#" class="hover:text-white transition-colors duration-200">Contact</a>
+            </nav>
+        </header>
+
+        <!-- Main Hero Section -->
+        <main class="flex-grow flex items-center justify-center px-4 sm:px-6 lg:px-8 mt-16 md:mt-0">
+            <div class="w-full max-w-5xl mx-auto flex flex-col items-center text-center">
+                
+                <!-- Headline -->
+                <div class="opacity-0 animate-fade-in-up" style="animation-delay: 0.1s;">
+                    <span class="inline-block py-1 px-3 rounded-full bg-slate-800 border border-slate-700 text-xs font-semibold tracking-wider text-indigo-300 uppercase mb-6 shadow-sm">
+                        Welcome to the Future of Learning
+                    </span>
+                    <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 mb-6 drop-shadow-sm">
+                        Access Your Workspace
+                    </h1>
+                    <p class="mt-4 text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-12">
+                        Select your designated panel below to securely log in and access your personalized dashboard, resources, and tools.
+                    </p>
+                </div>
+
+                <!-- Buttons Container (Flexbox) -->
+                <div class="flex flex-col md:flex-row items-stretch justify-center w-full gap-6 opacity-0 animate-fade-in-up" style="animation-delay: 0.3s;">
+                    
+                    <!-- Student Panel Button -->
+                    <a href="student.html" class="group relative flex-1 min-w-[280px]">
+                        <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl blur-md opacity-0 group-hover:opacity-70 transition duration-300"></div>
+                        <div class="relative h-full flex flex-col items-center justify-center gap-4 bg-slate-800/80 backdrop-blur-sm border border-slate-700 p-8 rounded-2xl overflow-hidden hover:-translate-y-2 transition-all duration-300 shadow-xl hover:shadow-glow-blue hover:border-blue-500/50">
+                            <div class="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
+                                <i class="fa-solid fa-user-graduate text-3xl transform group-hover:scale-110 transition-transform duration-300"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-white mb-1">Student Panel</h3>
+                                <p class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors duration-300">Access courses & grades</p>
+                            </div>
+                        </div>
+                    </a>
+
+                    <!-- Teacher Panel Button -->
+                    <a href="teacher.html" class="group relative flex-1 min-w-[280px]">
+                        <div class="absolute inset-0 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl blur-md opacity-0 group-hover:opacity-70 transition duration-300"></div>
+                        <div class="relative h-full flex flex-col items-center justify-center gap-4 bg-slate-800/80 backdrop-blur-sm border border-slate-700 p-8 rounded-2xl overflow-hidden hover:-translate-y-2 transition-all duration-300 shadow-xl hover:shadow-glow-green hover:border-emerald-500/50">
+                            <div class="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-300">
+                                <i class="fa-solid fa-chalkboard-user text-3xl transform group-hover:scale-110 transition-transform duration-300"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-white mb-1">Teacher Panel</h3>
+                                <p class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors duration-300">Manage classes & grading</p>
+                            </div>
+                        </div>
+                    </a>
+
+                    <!-- Admin Panel Button -->
+                    <a href="admins.html" class="group relative flex-1 min-w-[280px]">
+                        <div class="absolute inset-0 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl blur-md opacity-0 group-hover:opacity-70 transition duration-300"></div>
+                        <div class="relative h-full flex flex-col items-center justify-center gap-4 bg-slate-800/80 backdrop-blur-sm border border-slate-700 p-8 rounded-2xl overflow-hidden hover:-translate-y-2 transition-all duration-300 shadow-xl hover:shadow-glow-orange hover:border-orange-500/50">
+                            <div class="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition-colors duration-300">
+                                <i class="fa-solid fa-shield-halved text-3xl transform group-hover:scale-110 transition-transform duration-300"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-white mb-1">Admin Panel</h3>
+                                <p class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors duration-300">System settings & control</p>
+                            </div>
+                        </div>
+                    </a>
+
+                </div>
+            </div>
+        </main>
+        
+        <!-- Footer area -->
+        <footer class="w-full p-6 text-center text-sm text-slate-500 mt-auto">
+            <p>&copy; Tech Minds 2026 EduPortal Systems. All rights reserved.</p>
+            <p>Made  in India , For Students and Teaching Organization</p>
+        </footer>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,3834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title> PK School — Admin Panel</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from
+            "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+
+        import {
+            getAuth,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut
+        } from
+            "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+        import {
+            getFirestore,
+            collection,
+            doc,
+            getDoc,
+            getDocs,
+            setDoc,
+            updateDoc,
+            query,
+            where,
+            serverTimestamp
+        } from
+            "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+        /* =========================================================
+           FIREBASE CONFIGURATION
+        ========================================================= */
+
+        const firebaseConfig = {
+  apiKey: "AIzaSyCginB8GaT97rj1kZvAOq5Z-bGi_ZP8I6g",
+  authDomain: "school-management-927ee.firebaseapp.com",
+  projectId: "school-management-927ee",
+  storageBucket: "school-management-927ee.firebasestorage.app",
+  messagingSenderId: "786066553290",
+  appId: "1:786066553290:web:8cff2257695a59574eb733",
+  measurementId: "G-RVJZ9Z1M3D"
+};
+
+        /*
+         * CRITICAL:
+         * Admin panel uses its own named Firebase application.
+         */
+        const app = initializeApp(firebaseConfig, "ARAdminApp");
+
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        /* =========================================================
+           CLOUDINARY CONFIGURATION
+        ========================================================= */
+
+        const CLOUDINARY_CLOUD_NAME = "sp9fu3b1";
+        const CLOUDINARY_UPLOAD_PRESET = "ml_default";
+
+        /*
+         * Reusable Cloudinary helper.
+         * Currently not required by the admin features but included
+         * for architectural consistency.
+         */
+        async function uploadToCloudinary(file) {
+
+            if (!file) {
+                throw new Error("No file selected.");
+            }
+
+            const formData = new FormData();
+
+            formData.append("file", file);
+            formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+            const response = await fetch(
+                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Cloudinary upload failed.");
+            }
+
+            const data = await response.json();
+
+            return data.secure_url;
+        }
+
+        /* =========================================================
+           GLOBAL STATE
+        ========================================================= */
+
+        let currentUser = null;
+        let currentAdminProfile = null;
+
+        let teachers = [];
+        let students = [];
+        let classes = [];
+
+        let currentChart = null;
+
+        /* =========================================================
+           DOM HELPERS
+        ========================================================= */
+
+        const $ = id => document.getElementById(id);
+
+        /* =========================================================
+           UI HELPERS
+        ========================================================= */
+
+        function show(element) {
+            element.classList.remove("hidden");
+        }
+
+        function hide(element) {
+            element.classList.add("hidden");
+        }
+
+        function showToast(message, type = "success") {
+
+            const toast = document.createElement("div");
+
+            const icon =
+                type === "success"
+                    ? "✓"
+                    : type === "error"
+                        ? "!"
+                        : "i";
+
+            toast.className = `
+                fixed top-5 right-5 z-[9999]
+                min-w-[260px] max-w-sm
+                px-4 py-3 rounded-2xl
+                backdrop-blur-xl
+                border border-white/20
+                shadow-2xl
+                flex items-center gap-3
+                translate-x-[120%]
+                transition-all duration-300
+                ${type === "success"
+                    ? "bg-emerald-500/20 text-emerald-100"
+                    : type === "error"
+                        ? "bg-red-500/20 text-red-100"
+                        : "bg-blue-500/20 text-blue-100"
+                }
+            `;
+
+            toast.innerHTML = `
+                <div class="
+                    w-8 h-8 rounded-full
+                    flex items-center justify-center
+                    bg-white/10 font-bold
+                ">
+                    ${icon}
+                </div>
+
+                <div class="text-sm font-medium">
+                    ${escapeHTML(message)}
+                </div>
+            `;
+
+            document.body.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove("translate-x-[120%]");
+            });
+
+            setTimeout(() => {
+
+                toast.classList.add("translate-x-[120%]");
+
+                setTimeout(() => toast.remove(), 300);
+
+            }, 3000);
+        }
+
+        function escapeHTML(value) {
+
+            if (value === null || value === undefined) {
+                return "";
+            }
+
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function formatDate(timestamp) {
+
+            if (!timestamp) {
+                return "—";
+            }
+
+            try {
+
+                const date = timestamp.toDate
+                    ? timestamp.toDate()
+                    : new Date(timestamp);
+
+                return date.toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric"
+                });
+
+            } catch {
+                return "—";
+            }
+        }
+
+        function setLoading(button, loading, originalText = "Submit") {
+
+            if (!button) return;
+
+            button.disabled = loading;
+
+            if (loading) {
+
+                button.dataset.originalText =
+                    button.innerHTML || originalText;
+
+                button.innerHTML = `
+                    <span class="inline-block w-4 h-4
+                        border-2 border-white/40
+                        border-t-white rounded-full
+                        animate-spin"></span>
+                    Processing...
+                `;
+
+            } else {
+
+                button.innerHTML =
+                    button.dataset.originalText || originalText;
+            }
+        }
+
+        /* =========================================================
+           THEME
+        ========================================================= */
+
+        function initTheme() {
+
+            const savedTheme =
+                localStorage.getItem("arSchoolTheme");
+
+            if (savedTheme === "dark") {
+                document.documentElement.classList.add("dark");
+            } else if (savedTheme === "light") {
+                document.documentElement.classList.remove("dark");
+            } else {
+
+                if (
+                    window.matchMedia &&
+                    window.matchMedia(
+                        "(prefers-color-scheme: dark)"
+                    ).matches
+                ) {
+                    document.documentElement.classList.add("dark");
+                }
+            }
+
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+
+            document.documentElement.classList.toggle("dark");
+
+            const dark =
+                document.documentElement.classList.contains("dark");
+
+            localStorage.setItem(
+                "arSchoolTheme",
+                dark ? "dark" : "light"
+            );
+
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+
+            const icon = $("themeIcon");
+
+            if (!icon) return;
+
+            const dark =
+                document.documentElement.classList.contains("dark");
+
+            icon.textContent = dark ? "☀️" : "🌙";
+        }
+
+        /* =========================================================
+           AUTH SCREEN
+        ========================================================= */
+
+        function showAuthScreen() {
+
+            hide($("appShell"));
+            show($("authScreen"));
+
+            showLoginForm();
+        }
+
+        function showLoginForm() {
+
+            show($("loginForm"));
+            hide($("registerForm"));
+
+            $("authTitle").textContent = "Welcome Back";
+            $("authSubtitle").textContent =
+                "Sign in to your AR School administrator account.";
+
+            $("showLoginBtn").classList.add("bg-white/20");
+            $("showRegisterBtn").classList.remove("bg-white/20");
+        }
+
+        async function checkAdminExists() {
+
+            try {
+
+                const snapshot =
+                    await getDocs(
+                        query(
+                            collection(db, "users"),
+                            where("role", "==", "admin")
+                        )
+                    );
+
+                return !snapshot.empty;
+
+            } catch (error) {
+
+                console.error(error);
+
+                /*
+                 * Security-first behavior:
+                 * If Firestore cannot be checked, do not expose
+                 * admin registration.
+                 */
+                return true;
+            }
+        }
+
+        async function prepareRegistration() {
+
+            const exists = await checkAdminExists();
+
+            if (exists) {
+
+                hide($("registerSection"));
+
+                showToast(
+                    "An administrator already exists.",
+                    "info"
+                );
+
+                showLoginForm();
+
+                return;
+            }
+
+            show($("registerSection"));
+            show($("registerForm"));
+            hide($("loginForm"));
+
+            $("authTitle").textContent =
+                "Create Administrator";
+
+            $("authSubtitle").textContent =
+                "Create the primary AR School administrator account.";
+
+            $("showLoginBtn").classList.remove("bg-white/20");
+            $("showRegisterBtn").classList.add("bg-white/20");
+        }
+
+        /* =========================================================
+           LOGIN
+        ========================================================= */
+
+        async function handleLogin(event) {
+
+            event.preventDefault();
+
+            const email =
+                $("loginEmail").value.trim();
+
+            const password =
+                $("loginPassword").value;
+
+            const button =
+                $("loginButton");
+
+            if (!email || !password) {
+
+                showToast(
+                    "Please enter email and password.",
+                    "error"
+                );
+
+                return;
+            }
+
+            setLoading(
+                button,
+                true,
+                "Login"
+            );
+
+            try {
+
+                const credential =
+                    await signInWithEmailAndPassword(
+                        auth,
+                        email,
+                        password
+                    );
+
+                const profileRef =
+                    doc(db, "users", credential.user.uid);
+
+                const profile =
+                    await getDoc(profileRef);
+
+                if (
+                    !profile.exists() ||
+                    profile.data().role !== "admin"
+                ) {
+
+                    await signOut(auth);
+
+                    showToast(
+                        "Access denied. Admin account required.",
+                        "error"
+                    );
+
+                    return;
+                }
+
+                showToast(
+                    "Welcome to PK School Admin Panel."
+                );
+
+            } catch (error) {
+
+                console.error(error);
+
+                let message =
+                    "Unable to login.";
+
+                if (
+                    error.code ===
+                    "auth/invalid-credential"
+                ) {
+                    message =
+                        "Invalid email or password.";
+                }
+
+                if (
+                    error.code ===
+                    "auth/user-not-found"
+                ) {
+                    message =
+                        "No account found.";
+                }
+
+                if (
+                    error.code ===
+                    "auth/wrong-password"
+                ) {
+                    message =
+                        "Incorrect password.";
+                }
+
+                showToast(
+                    message,
+                    "error"
+                );
+
+            } finally {
+
+                setLoading(
+                    button,
+                    false,
+                    "Login"
+                );
+            }
+        }
+
+        /* =========================================================
+           ADMIN REGISTRATION
+        ========================================================= */
+
+        async function handleRegistration(event) {
+
+            event.preventDefault();
+
+            const name =
+                $("registerName").value.trim();
+
+            const email =
+                $("registerEmail").value.trim();
+
+            const password =
+                $("registerPassword").value;
+
+            const confirmPassword =
+                $("registerConfirmPassword").value;
+
+            const button =
+                $("registerButton");
+
+            if (
+                !name ||
+                !email ||
+                !password ||
+                !confirmPassword
+            ) {
+
+                showToast(
+                    "Please complete all fields.",
+                    "error"
+                );
+
+                return;
+            }
+
+            if (password.length < 6) {
+
+                showToast(
+                    "Password must contain at least 6 characters.",
+                    "error"
+                );
+
+                return;
+            }
+
+            if (password !== confirmPassword) {
+
+                showToast(
+                    "Passwords do not match.",
+                    "error"
+                );
+
+                return;
+            }
+
+            setLoading(
+                button,
+                true,
+                "Create Admin"
+            );
+
+            try {
+
+                /*
+                 * Double-check immediately before creation
+                 * to reduce race-condition risk.
+                 */
+                const alreadyExists =
+                    await checkAdminExists();
+
+                if (alreadyExists) {
+
+                    showToast(
+                        "An administrator already exists.",
+                        "error"
+                    );
+
+                    hide($("registerSection"));
+                    showLoginForm();
+
+                    return;
+                }
+
+                const credential =
+                    await createUserWithEmailAndPassword(
+                        auth,
+                        email,
+                        password
+                    );
+
+                const uid =
+                    credential.user.uid;
+
+                await setDoc(
+                    doc(db, "users", uid),
+                    {
+                        uid: uid,
+                        name: name,
+                        email: email,
+                        role: "admin",
+                        createdAt: serverTimestamp()
+                    }
+                );
+
+                /*
+                 * Initialize global settings if absent.
+                 */
+                await initializeSettings();
+
+                showToast(
+                    "Administrator account created."
+                );
+
+            } catch (error) {
+
+                console.error(error);
+
+                let message =
+                    "Unable to create administrator.";
+
+                if (
+                    error.code ===
+                    "auth/email-already-in-use"
+                ) {
+                    message =
+                        "This email is already registered.";
+                }
+
+                if (
+                    error.code ===
+                    "auth/invalid-email"
+                ) {
+                    message =
+                        "Please enter a valid email.";
+                }
+
+                if (
+                    error.code ===
+                    "auth/weak-password"
+                ) {
+                    message =
+                        "Password is too weak.";
+                }
+
+                showToast(
+                    message,
+                    "error"
+                );
+
+            } finally {
+
+                setLoading(
+                    button,
+                    false,
+                    "Create Admin"
+                );
+            }
+        }
+
+        /* =========================================================
+           SETTINGS
+        ========================================================= */
+
+        async function initializeSettings() {
+
+            const settingsRef =
+                doc(db, "settings", "registration");
+
+            const existing =
+                await getDoc(settingsRef);
+
+            if (!existing.exists()) {
+
+                await setDoc(
+                    settingsRef,
+                    {
+                        allowTeacherRegistration: true,
+                        allowStudentRegistration: true,
+                        updatedAt: serverTimestamp()
+                    }
+                );
+            }
+        }
+
+        async function loadSettings() {
+
+            try {
+
+                await initializeSettings();
+
+                const settings =
+                    await getDoc(
+                        doc(
+                            db,
+                            "settings",
+                            "registration"
+                        )
+                    );
+
+                if (!settings.exists()) {
+                    return;
+                }
+
+                const data =
+                    settings.data();
+
+                $("teacherRegistrationToggle").checked =
+                    data.allowTeacherRegistration !== false;
+
+                $("studentRegistrationToggle").checked =
+                    data.allowStudentRegistration !== false;
+
+            } catch (error) {
+
+                console.error(error);
+
+                showToast(
+                    "Unable to load settings.",
+                    "error"
+                );
+            }
+        }
+
+        async function updateRegistrationSetting(
+            setting,
+            value
+        ) {
+
+            try {
+
+                await updateDoc(
+                    doc(
+                        db,
+                        "settings",
+                        "registration"
+                    ),
+                    {
+                        [setting]: value,
+                        updatedAt: serverTimestamp()
+                    }
+                );
+
+                showToast(
+                    value
+                        ? "Registration enabled."
+                        : "Registration disabled."
+                );
+
+            } catch (error) {
+
+                console.error(error);
+
+                showToast(
+                    "Could not update setting.",
+                    "error"
+                );
+
+                await loadSettings();
+            }
+        }
+
+        /* =========================================================
+           DATA LOADING
+        ========================================================= */
+
+        async function loadUsers() {
+
+            try {
+
+                const snapshot =
+                    await getDocs(
+                        collection(db, "users")
+                    );
+
+                teachers = [];
+                students = [];
+
+                snapshot.forEach(item => {
+
+                    const data = {
+                        id: item.id,
+                        ...item.data()
+                    };
+
+                    if (data.role === "teacher") {
+                        teachers.push(data);
+                    }
+
+                    if (data.role === "student") {
+                        students.push(data);
+                    }
+                });
+
+                renderTeacherTable();
+                renderStudentTable();
+
+            } catch (error) {
+
+                console.error(error);
+
+                showToast(
+                    "Unable to load users.",
+                    "error"
+                );
+            }
+        }
+
+        async function loadClasses() {
+
+            try {
+
+                const snapshot =
+                    await getDocs(
+                        collection(db, "classes")
+                    );
+
+                classes = [];
+
+                snapshot.forEach(item => {
+
+                    classes.push({
+                        id: item.id,
+                        ...item.data()
+                    });
+
+                });
+
+                updateDashboard();
+                renderClassTable();
+
+            } catch (error) {
+
+                console.error(error);
+
+                showToast(
+                    "Unable to load classes.",
+                    "error"
+                );
+            }
+        }
+
+        /* =========================================================
+           DASHBOARD
+        ========================================================= */
+
+        function updateDashboard() {
+
+            $("totalTeachers").textContent =
+                teachers.length;
+
+            $("totalStudents").textContent =
+                students.length;
+
+            $("totalClasses").textContent =
+                classes.length;
+
+            renderChart();
+        }
+
+        function renderChart() {
+
+            const canvas =
+                $("schoolChart");
+
+            if (!canvas) return;
+
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            currentChart =
+                new Chart(canvas, {
+
+                    type: "doughnut",
+
+                    data: {
+
+                        labels: [
+                            "Teachers",
+                            "Students",
+                            "Classes"
+                        ],
+
+                        datasets: [
+                            {
+                                data: [
+                                    teachers.length,
+                                    students.length,
+                                    classes.length
+                                ],
+
+                                borderWidth: 0,
+
+                                backgroundColor: [
+                                    "rgba(59,130,246,.8)",
+                                    "rgba(168,85,247,.8)",
+                                    "rgba(16,185,129,.8)"
+                                ]
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio: false,
+
+                        plugins: {
+
+                            legend: {
+                                position: "bottom",
+                                labels: {
+                                    color:
+                                        document.documentElement
+                                            .classList
+                                            .contains("dark")
+                                            ? "#e5e7eb"
+                                            : "#374151"
+                                }
+                            }
+                        }
+                    }
+                });
+        }
+
+        /* =========================================================
+           TEACHER TABLE
+        ========================================================= */
+
+        function renderTeacherTable() {
+
+            const body =
+                $("teacherTableBody");
+
+            if (!body) return;
+
+            if (!teachers.length) {
+
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="4"
+                            class="px-4 py-8 text-center
+                            text-gray-500 dark:text-gray-400">
+                            No teachers registered.
+                        </td>
+                    </tr>
+                `;
+
+                return;
+            }
+
+            body.innerHTML =
+                teachers.map(teacher => {
+
+                    const initials =
+                        (teacher.name || "T")
+                            .charAt(0)
+                            .toUpperCase();
+
+                    return `
+                        <tr class="
+                            border-b border-gray-200/20
+                            hover:bg-white/5
+                            transition
+                        ">
+
+                            <td class="px-4 py-4">
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="
+                                        w-10 h-10
+                                        rounded-xl
+                                        bg-gradient-to-br
+                                        from-blue-500
+                                        to-purple-600
+                                        flex items-center
+                                        justify-center
+                                        text-white
+                                        font-bold
+                                    ">
+                                        ${escapeHTML(initials)}
+                                    </div>
+
+                                    <div>
+                                        <div class="
+                                            font-semibold
+                                            text-gray-900
+                                            dark:text-white
+                                        ">
+                                            ${escapeHTML(
+                                                teacher.name ||
+                                                "Unnamed"
+                                            )}
+                                        </div>
+
+                                        <div class="
+                                            text-xs
+                                            text-gray-500
+                                            dark:text-gray-400
+                                        ">
+                                            Teacher
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+                            <td class="
+                                px-4 py-4
+                                text-sm
+                                text-gray-600
+                                dark:text-gray-300
+                            ">
+                                ${escapeHTML(
+                                    teacher.email || "—"
+                                )}
+                            </td>
+
+                            <td class="
+                                px-4 py-4
+                                text-sm
+                                text-gray-600
+                                dark:text-gray-300
+                            ">
+                                ${formatDate(
+                                    teacher.createdAt
+                                )}
+                            </td>
+
+                            <td class="px-4 py-4">
+
+                                <button
+                                    onclick="window.viewUser('${teacher.id}')"
+                                    class="
+                                        px-3 py-2
+                                        rounded-xl
+                                        bg-white/10
+                                        hover:bg-white/20
+                                        text-sm
+                                        transition
+                                    "
+                                >
+                                    View
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    `;
+
+                }).join("");
+        }
+
+        /* =========================================================
+           STUDENT TABLE
+        ========================================================= */
+
+        function renderStudentTable() {
+
+            const body =
+                $("studentTableBody");
+
+            if (!body) return;
+
+            if (!students.length) {
+
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="4"
+                            class="px-4 py-8 text-center
+                            text-gray-500 dark:text-gray-400">
+                            No students registered.
+                        </td>
+                    </tr>
+                `;
+
+                return;
+            }
+
+            body.innerHTML =
+                students.map(student => {
+
+                    const initials =
+                        (student.name || "S")
+                            .charAt(0)
+                            .toUpperCase();
+
+                    return `
+                        <tr class="
+                            border-b border-gray-200/20
+                            hover:bg-white/5
+                            transition
+                        ">
+
+                            <td class="px-4 py-4">
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="
+                                        w-10 h-10
+                                        rounded-xl
+                                        bg-gradient-to-br
+                                        from-purple-500
+                                        to-pink-500
+                                        flex items-center
+                                        justify-center
+                                        text-white
+                                        font-bold
+                                    ">
+                                        ${escapeHTML(initials)}
+                                    </div>
+
+                                    <div>
+                                        <div class="
+                                            font-semibold
+                                            text-gray-900
+                                            dark:text-white
+                                        ">
+                                            ${escapeHTML(
+                                                student.name ||
+                                                "Unnamed"
+                                            )}
+                                        </div>
+
+                                        <div class="
+                                            text-xs
+                                            text-gray-500
+                                            dark:text-gray-400
+                                        ">
+                                            Student
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+                            <td class="
+                                px-4 py-4
+                                text-sm
+                                text-gray-600
+                                dark:text-gray-300
+                            ">
+                                ${escapeHTML(
+                                    student.email || "—"
+                                )}
+                            </td>
+
+                            <td class="
+                                px-4 py-4
+                                text-sm
+                                text-gray-600
+                                dark:text-gray-300
+                            ">
+                                ${formatDate(
+                                    student.createdAt
+                                )}
+                            </td>
+
+                            <td class="px-4 py-4">
+
+                                <button
+                                    onclick="window.viewUser('${student.id}')"
+                                    class="
+                                        px-3 py-2
+                                        rounded-xl
+                                        bg-white/10
+                                        hover:bg-white/20
+                                        text-sm
+                                        transition
+                                    "
+                                >
+                                    View
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    `;
+
+                }).join("");
+        }
+
+        /* =========================================================
+           CLASS TABLE
+        ========================================================= */
+
+        function renderClassTable() {
+
+            const body =
+                $("classTableBody");
+
+            if (!body) return;
+
+            if (!classes.length) {
+
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="5"
+                            class="px-4 py-8 text-center
+                            text-gray-500 dark:text-gray-400">
+                            No classes created yet.
+                        </td>
+                    </tr>
+                `;
+
+                return;
+            }
+
+            body.innerHTML =
+                classes.map(item => {
+
+                    const teacher =
+                        teachers.find(
+                            teacher =>
+                                teacher.id ===
+                                item.teacherId
+                        );
+
+                    return `
+                        <tr class="
+                            border-b border-gray-200/20
+                            hover:bg-white/5
+                            transition
+                        ">
+
+                            <td class="px-4 py-4">
+
+                                <div class="
+                                    font-semibold
+                                    text-gray-900
+                                    dark:text-white
+                                ">
+                                    ${escapeHTML(
+                                        item.className ||
+                                        "Unnamed Class"
+                                    )}
+                                </div>
+
+                            </td>
+
+                            <td class="
+                                px-4 py-4
+                                text-sm
+                                text-gray-600
+                                dark:text-gray-300
+                            ">
+                                ${escapeHTML(
+                                    item.subject || "—"
+                                )}
+                            </td>
+
+                            <td class="
+                                px-4 py-4
+                                text-sm
+                                text-gray-600
+                                dark:text-gray-300
+                            ">
+                                ${escapeHTML(
+                                    teacher?.name ||
+                                    item.teacherId ||
+                                    "—"
+                                )}
+                            </td>
+
+                            <td class="px-4 py-4">
+
+                                <span class="
+                                    px-3 py-1
+                                    rounded-full
+                                    bg-blue-500/10
+                                    text-blue-600
+                                    dark:text-blue-300
+                                    text-xs
+                                    font-bold
+                                ">
+                                    ${escapeHTML(
+                                        item.joinCode ||
+                                        "—"
+                                    )}
+                                </span>
+
+                            </td>
+
+                            <td class="
+                                px-4 py-4
+                                text-sm
+                                text-gray-600
+                                dark:text-gray-300
+                            ">
+                                ${formatDate(
+                                    item.createdAt
+                                )}
+                            </td>
+
+                        </tr>
+                    `;
+
+                }).join("");
+        }
+
+        /* =========================================================
+           USER DETAILS
+        ========================================================= */
+
+        window.viewUser = async function(uid) {
+
+            try {
+
+                const userRef =
+                    doc(db, "users", uid);
+
+                const userSnapshot =
+                    await getDoc(userRef);
+
+                if (!userSnapshot.exists()) {
+
+                    showToast(
+                        "User not found.",
+                        "error"
+                    );
+
+                    return;
+                }
+
+                const user =
+                    userSnapshot.data();
+
+                $("userModalName").textContent =
+                    user.name || "Unnamed User";
+
+                $("userModalEmail").textContent =
+                    user.email || "—";
+
+                $("userModalRole").textContent =
+                    user.role || "—";
+
+                $("userModalUID").textContent =
+                    user.uid || uid;
+
+                $("userModalCreated").textContent =
+                    formatDate(user.createdAt);
+
+                show($("userModal"));
+
+            } catch (error) {
+
+                console.error(error);
+
+                showToast(
+                    "Unable to load user details.",
+                    "error"
+                );
+            }
+        };
+
+        function closeUserModal() {
+            hide($("userModal"));
+        }
+
+        /* =========================================================
+           NAVIGATION
+        ========================================================= */
+
+        function switchPage(page) {
+
+            document
+                .querySelectorAll(".page")
+                .forEach(element => {
+                    hide(element);
+                });
+
+            const target =
+                $(`${page}Page`);
+
+            if (target) {
+                show(target);
+            }
+
+            document
+                .querySelectorAll(".navItem")
+                .forEach(button => {
+                    button.classList.remove(
+                        "bg-white/15",
+                        "text-blue-400"
+                    );
+                });
+
+            const active =
+                document.querySelector(
+                    `[data-page="${page}"]`
+                );
+
+            if (active) {
+
+                active.classList.add(
+                    "bg-white/15",
+                    "text-blue-400"
+                );
+            }
+
+            $("mobileMenu").classList.add(
+                "hidden"
+            );
+        }
+
+        /* =========================================================
+           APP INITIALIZATION
+        ========================================================= */
+
+        async function initializeDashboard() {
+
+            show($("loadingOverlay"));
+
+            try {
+
+                await Promise.all([
+                    loadUsers(),
+                    loadClasses(),
+                    loadSettings()
+                ]);
+
+                updateDashboard();
+
+            } catch (error) {
+
+                console.error(error);
+
+            } finally {
+
+                setTimeout(() => {
+                    hide($("loadingOverlay"));
+                }, 400);
+            }
+        }
+
+        /* =========================================================
+           AUTH STATE
+        ========================================================= */
+
+        onAuthStateChanged(
+            auth,
+            async user => {
+
+                if (!user) {
+
+                    currentUser = null;
+                    currentAdminProfile = null;
+
+                    showAuthScreen();
+
+                    return;
+                }
+
+                try {
+
+                    const profileSnapshot =
+                        await getDoc(
+                            doc(
+                                db,
+                                "users",
+                                user.uid
+                            )
+                        );
+
+                    if (
+                        !profileSnapshot.exists() ||
+                        profileSnapshot.data().role !== "admin"
+                    ) {
+
+                        await signOut(auth);
+
+                        showToast(
+                            "Access denied.",
+                            "error"
+                        );
+
+                        return;
+                    }
+
+                    currentUser = user;
+
+                    currentAdminProfile =
+                        profileSnapshot.data();
+
+                    $("adminName").textContent =
+                        currentAdminProfile.name ||
+                        "Administrator";
+
+                    $("adminEmail").textContent =
+                        currentAdminProfile.email ||
+                        user.email ||
+                        "";
+
+                    hide($("authScreen"));
+                    show($("appShell"));
+
+                    switchPage("dashboard");
+
+                    await initializeDashboard();
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    await signOut(auth);
+
+                    showToast(
+                        "Unable to verify administrator access.",
+                        "error"
+                    );
+                }
+            }
+        );
+
+        /* =========================================================
+           EVENT LISTENERS
+        ========================================================= */
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            () => {
+
+                initTheme();
+
+                $("themeToggle")
+                    .addEventListener(
+                        "click",
+                        toggleTheme
+                    );
+
+                $("showLoginBtn")
+                    .addEventListener(
+                        "click",
+                        showLoginForm
+                    );
+
+                $("showRegisterBtn")
+                    .addEventListener(
+                        "click",
+                        prepareRegistration
+                    );
+
+                $("loginForm")
+                    .addEventListener(
+                        "submit",
+                        handleLogin
+                    );
+
+                $("registerForm")
+                    .addEventListener(
+                        "submit",
+                        handleRegistration
+                    );
+
+                $("logoutButton")
+                    .addEventListener(
+                        "click",
+                        async () => {
+
+                            try {
+
+                                await signOut(auth);
+
+                                showToast(
+                                    "Logged out successfully."
+                                );
+
+                            } catch (error) {
+
+                                showToast(
+                                    "Logout failed.",
+                                    "error"
+                                );
+                            }
+                        }
+                    );
+
+                document
+                    .querySelectorAll(".navItem")
+                    .forEach(button => {
+
+                        button.addEventListener(
+                            "click",
+                            () => {
+
+                                switchPage(
+                                    button.dataset.page
+                                );
+
+                            }
+                        );
+
+                    });
+
+                $("mobileMenuButton")
+                    .addEventListener(
+                        "click",
+                        () => {
+
+                            $("mobileMenu")
+                                .classList
+                                .toggle("hidden");
+
+                        }
+                    );
+
+                $("closeUserModal")
+                    .addEventListener(
+                        "click",
+                        closeUserModal
+                    );
+
+                $("teacherRegistrationToggle")
+                    .addEventListener(
+                        "change",
+                        event => {
+
+                            updateRegistrationSetting(
+                                "allowTeacherRegistration",
+                                event.target.checked
+                            );
+
+                        }
+                    );
+
+                $("studentRegistrationToggle")
+                    .addEventListener(
+                        "change",
+                        event => {
+
+                            updateRegistrationSetting(
+                                "allowStudentRegistration",
+                                event.target.checked
+                            );
+
+                        }
+                    );
+
+                $("refreshButton")
+                    .addEventListener(
+                        "click",
+                        async () => {
+
+                            await initializeDashboard();
+
+                            showToast(
+                                "Dashboard refreshed."
+                            );
+                        }
+                    );
+
+                $("userModal")
+                    .addEventListener(
+                        "click",
+                        event => {
+
+                            if (
+                                event.target ===
+                                $("userModal")
+                            ) {
+                                closeUserModal();
+                            }
+
+                        }
+                    );
+
+            }
+        );
+
+    </script>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family:
+                Inter,
+                ui-sans-serif,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+
+            background:
+                radial-gradient(
+                    circle at top left,
+                    rgba(59,130,246,.22),
+                    transparent 30%
+                ),
+                radial-gradient(
+                    circle at bottom right,
+                    rgba(168,85,247,.20),
+                    transparent 30%
+                ),
+                #f4f7fb;
+
+            color: #111827;
+
+            transition:
+                background .3s ease,
+                color .3s ease;
+        }
+
+        .dark body {
+            background:
+                radial-gradient(
+                    circle at top left,
+                    rgba(59,130,246,.18),
+                    transparent 30%
+                ),
+                radial-gradient(
+                    circle at bottom right,
+                    rgba(168,85,247,.15),
+                    transparent 30%
+                ),
+                #070b16;
+
+            color: #f9fafb;
+        }
+
+        .glass {
+            background:
+                rgba(255,255,255,.58);
+
+            backdrop-filter:
+                blur(22px);
+
+            -webkit-backdrop-filter:
+                blur(22px);
+
+            border:
+                1px solid
+                rgba(255,255,255,.45);
+
+            box-shadow:
+                0 15px 40px
+                rgba(15,23,42,.08);
+        }
+
+        .dark .glass {
+            background:
+                rgba(17,24,39,.58);
+
+            border:
+                1px solid
+                rgba(255,255,255,.08);
+
+            box-shadow:
+                0 20px 50px
+                rgba(0,0,0,.30);
+        }
+
+        .glass-input {
+            background:
+                rgba(255,255,255,.55);
+
+            border:
+                1px solid
+                rgba(148,163,184,.30);
+
+            outline: none;
+
+            transition:
+                border .2s ease,
+                box-shadow .2s ease,
+                background .2s ease;
+        }
+
+        .glass-input:focus {
+            border-color:
+                rgba(59,130,246,.6);
+
+            box-shadow:
+                0 0 0 4px
+                rgba(59,130,246,.10);
+        }
+
+        .dark .glass-input {
+            background:
+                rgba(15,23,42,.65);
+
+            border-color:
+                rgba(255,255,255,.10);
+
+            color: white;
+        }
+
+        .page {
+            animation:
+                pageIn .3s ease;
+        }
+
+        @keyframes pageIn {
+
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 7px;
+            height: 7px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background:
+                rgba(100,116,139,.35);
+
+            border-radius: 20px;
+        }
+
+    </style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     AUTH SCREEN
+============================================================ -->
+
+<div id="authScreen"
+     class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-md">
+
+        <!-- Logo -->
+        <div class="text-center mb-8">
+
+            <div class="
+                inline-flex
+                w-20 h-20
+                rounded-3xl
+                bg-gradient-to-br
+                from-blue-600
+                to-purple-600
+                items-center
+                justify-center
+                shadow-2xl
+                shadow-blue-500/20
+                mb-4
+            ">
+                <span class="text-4xl">🎓</span>
+            </div>
+
+            <h1 class="
+                text-3xl
+                font-black
+                tracking-tight
+                text-gray-900
+                dark:text-white
+            ">
+                PK School
+            </h1>
+
+            <p class="
+                text-sm
+                text-gray-500
+                dark:text-gray-400
+                mt-1
+            ">
+                Administrator Portal
+            </p>
+
+        </div>
+
+        <!-- Auth Card -->
+        <div class="
+            glass
+            rounded-[2rem]
+            p-5 sm:p-7
+        ">
+
+            <div class="text-center mb-6">
+
+                <h2 id="authTitle"
+                    class="
+                        text-2xl
+                        font-bold
+                        text-gray-900
+                        dark:text-white
+                    ">
+                    Welcome Back
+                </h2>
+
+                <p id="authSubtitle"
+                   class="
+                       text-sm
+                       text-gray-500
+                       dark:text-gray-400
+                       mt-1
+                   ">
+                    Sign in to your PK School administrator account.
+                </p>
+
+            </div>
+
+            <!-- Login/Register Selector -->
+            <div class="
+                flex
+                bg-black/5
+                dark:bg-white/5
+                rounded-2xl
+                p-1
+                mb-6
+            ">
+
+                <button
+                    id="showLoginBtn"
+                    class="
+                        flex-1
+                        py-2.5
+                        rounded-xl
+                        text-sm
+                        font-semibold
+                        transition
+                        bg-white/20
+                    "
+                >
+                    Login
+                </button>
+
+                <button
+                    id="showRegisterBtn"
+                    class="
+                        flex-1
+                        py-2.5
+                        rounded-xl
+                        text-sm
+                        font-semibold
+                        transition
+                    "
+                >
+                    Register
+                </button>
+
+            </div>
+
+            <!-- LOGIN -->
+            <form id="loginForm"
+                  class="space-y-4">
+
+                <div>
+
+                    <label class="
+                        block
+                        text-sm
+                        font-medium
+                        mb-2
+                    ">
+                        Email Address
+                    </label>
+
+                    <input
+                        id="loginEmail"
+                        type="email"
+                        autocomplete="email"
+                        placeholder="admin@example.com"
+                        class="
+                            glass-input
+                            w-full
+                            px-4
+                            py-3.5
+                            rounded-2xl
+                        "
+                        required
+                    >
+
+                </div>
+
+                <div>
+
+                    <label class="
+                        block
+                        text-sm
+                        font-medium
+                        mb-2
+                    ">
+                        Password
+                    </label>
+
+                    <input
+                        id="loginPassword"
+                        type="password"
+                        autocomplete="current-password"
+                        placeholder="••••••••"
+                        class="
+                            glass-input
+                            w-full
+                            px-4
+                            py-3.5
+                            rounded-2xl
+                        "
+                        required
+                    >
+
+                </div>
+
+                <button
+                    id="loginButton"
+                    type="submit"
+                    class="
+                        w-full
+                        py-3.5
+                        rounded-2xl
+                        bg-gradient-to-r
+                        from-blue-600
+                        to-purple-600
+                        text-white
+                        font-bold
+                        shadow-lg
+                        shadow-blue-500/20
+                        hover:scale-[1.01]
+                        active:scale-[.99]
+                        transition
+                    "
+                >
+                    Login
+                </button>
+
+            </form>
+
+            <!-- REGISTER -->
+            <div id="registerSection"
+                 class="hidden">
+
+                <form id="registerForm"
+                      class="space-y-4">
+
+                    <div>
+
+                        <label class="
+                            block
+                            text-sm
+                            font-medium
+                            mb-2
+                        ">
+                            Administrator Name
+                        </label>
+
+                        <input
+                            id="registerName"
+                            type="text"
+                            placeholder="Enter your name"
+                            class="
+                                glass-input
+                                w-full
+                                px-4
+                                py-3.5
+                                rounded-2xl
+                            "
+                            required
+                        >
+
+                    </div>
+
+                    <div>
+
+                        <label class="
+                            block
+                            text-sm
+                            font-medium
+                            mb-2
+                        ">
+                            Email Address
+                        </label>
+
+                        <input
+                            id="registerEmail"
+                            type="email"
+                            placeholder="admin@example.com"
+                            class="
+                                glass-input
+                                w-full
+                                px-4
+                                py-3.5
+                                rounded-2xl
+                            "
+                            required
+                        >
+
+                    </div>
+
+                    <div>
+
+                        <label class="
+                            block
+                            text-sm
+                            font-medium
+                            mb-2
+                        ">
+                            Password
+                        </label>
+
+                        <input
+                            id="registerPassword"
+                            type="password"
+                            placeholder="Minimum 6 characters"
+                            minlength="6"
+                            class="
+                                glass-input
+                                w-full
+                                px-4
+                                py-3.5
+                                rounded-2xl
+                            "
+                            required
+                        >
+
+                    </div>
+
+                    <div>
+
+                        <label class="
+                            block
+                            text-sm
+                            font-medium
+                            mb-2
+                        ">
+                            Confirm Password
+                        </label>
+
+                        <input
+                            id="registerConfirmPassword"
+                            type="password"
+                            placeholder="Repeat password"
+                            minlength="6"
+                            class="
+                                glass-input
+                                w-full
+                                px-4
+                                py-3.5
+                                rounded-2xl
+                            "
+                            required
+                        >
+
+                    </div>
+
+                    <button
+                        id="registerButton"
+                        type="submit"
+                        class="
+                            w-full
+                            py-3.5
+                            rounded-2xl
+                            bg-gradient-to-r
+                            from-blue-600
+                            to-purple-600
+                            text-white
+                            font-bold
+                            shadow-lg
+                            shadow-blue-500/20
+                            transition
+                        "
+                    >
+                        Create Admin
+                    </button>
+
+                </form>
+
+            </div>
+
+        </div>
+
+        <p class="
+            text-center
+            text-xs
+            text-gray-400
+            mt-5
+        ">
+            PK School Management System
+        </p>
+
+    </div>
+
+</div>
+
+
+<!-- ============================================================
+     APP SHELL
+============================================================ -->
+
+<div id="appShell"
+     class="hidden min-h-screen">
+
+    <!-- MOBILE TOP BAR -->
+    <header class="
+        lg:hidden
+        sticky top-0 z-50
+        glass
+        px-4 py-3
+        flex items-center
+        justify-between
+    ">
+
+        <div class="flex items-center gap-3">
+
+            <div class="
+                w-10 h-10
+                rounded-xl
+                bg-gradient-to-br
+                from-blue-600
+                to-purple-600
+                flex items-center
+                justify-center
+            ">
+                🎓
+            </div>
+
+            <div>
+
+                <div class="
+                    font-bold
+                    text-gray-900
+                    dark:text-white
+                ">
+                    AR School
+                </div>
+
+                <div class="
+                    text-[10px]
+                    text-gray-500
+                    dark:text-gray-400
+                ">
+                    Admin Panel
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="flex items-center gap-2">
+
+            <button
+                id="themeToggle"
+                class="
+                    w-10 h-10
+                    rounded-xl
+                    bg-white/10
+                    hover:bg-white/20
+                    transition
+                "
+            >
+                <span id="themeIcon">🌙</span>
+            </button>
+
+            <button
+                id="mobileMenuButton"
+                class="
+                    w-10 h-10
+                    rounded-xl
+                    bg-white/10
+                    hover:bg-white/20
+                    transition
+                "
+            >
+                ☰
+            </button>
+
+        </div>
+
+    </header>
+
+
+    <!-- MOBILE MENU -->
+    <div id="mobileMenu"
+         class="
+             hidden
+             lg:hidden
+             fixed
+             top-[65px]
+             left-0
+             right-0
+             z-40
+             glass
+             p-4
+             shadow-2xl
+         ">
+
+        <div class="grid gap-2">
+
+            <button data-page="dashboard"
+                    class="navItem text-left px-4 py-3 rounded-xl">
+                📊 Dashboard
+            </button>
+
+            <button data-page="teachers"
+                    class="navItem text-left px-4 py-3 rounded-xl">
+                👨‍🏫 Teachers
+            </button>
+
+            <button data-page="students"
+                    class="navItem text-left px-4 py-3 rounded-xl">
+                🎓 Students
+            </button>
+
+            <button data-page="classes"
+                    class="navItem text-left px-4 py-3 rounded-xl">
+                🏫 Classes
+            </button>
+
+            <button data-page="settings"
+                    class="navItem text-left px-4 py-3 rounded-xl">
+                ⚙️ Settings
+            </button>
+
+            <button
+                id="logoutButton"
+                class="
+                    text-left
+                    px-4 py-3
+                    rounded-xl
+                    text-red-400
+                    bg-red-500/10
+                "
+            >
+                🚪 Logout
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- DESKTOP SIDEBAR -->
+    <aside class="
+        hidden
+        lg:flex
+        fixed
+        left-0
+        top-0
+        bottom-0
+        w-72
+        glass
+        flex-col
+        p-5
+        z-50
+    ">
+
+        <!-- Logo -->
+        <div class="
+            flex items-center
+            gap-3
+            px-3
+            py-4
+            mb-6
+        ">
+
+            <div class="
+                w-12 h-12
+                rounded-2xl
+                bg-gradient-to-br
+                from-blue-600
+                to-purple-600
+                flex items-center
+                justify-center
+                text-xl
+                shadow-lg
+            ">
+                🎓
+            </div>
+
+            <div>
+
+                <div class="
+                    font-black
+                    text-xl
+                    text-gray-900
+                    dark:text-white
+                ">
+                    AR School
+                </div>
+
+                <div class="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                ">
+                    Admin Dashboard
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Navigation -->
+        <nav class="space-y-2 flex-1">
+
+            <button
+                data-page="dashboard"
+                class="
+                    navItem
+                    w-full
+                    text-left
+                    px-4 py-3
+                    rounded-2xl
+                    flex items-center
+                    gap-3
+                    transition
+                "
+            >
+                <span>📊</span>
+                <span>Dashboard</span>
+            </button>
+
+            <button
+                data-page="teachers"
+                class="
+                    navItem
+                    w-full
+                    text-left
+                    px-4 py-3
+                    rounded-2xl
+                    flex items-center
+                    gap-3
+                    transition
+                "
+            >
+                <span>👨‍🏫</span>
+                <span>Teachers</span>
+            </button>
+
+            <button
+                data-page="students"
+                class="
+                    navItem
+                    w-full
+                    text-left
+                    px-4 py-3
+                    rounded-2xl
+                    flex items-center
+                    gap-3
+                    transition
+                "
+            >
+                <span>🎓</span>
+                <span>Students</span>
+            </button>
+
+            <button
+                data-page="classes"
+                class="
+                    navItem
+                    w-full
+                    text-left
+                    px-4 py-3
+                    rounded-2xl
+                    flex items-center
+                    gap-3
+                    transition
+                "
+            >
+                <span>🏫</span>
+                <span>Classes</span>
+            </button>
+
+            <button
+                data-page="settings"
+                class="
+                    navItem
+                    w-full
+                    text-left
+                    px-4 py-3
+                    rounded-2xl
+                    flex items-center
+                    gap-3
+                    transition
+                "
+            >
+                <span>⚙️</span>
+                <span>Settings</span>
+            </button>
+
+        </nav>
+
+        <!-- Admin Profile -->
+        <div class="
+            glass
+            rounded-2xl
+            p-3
+            mb-3
+        ">
+
+            <div class="flex items-center gap-3">
+
+                <div class="
+                    w-10 h-10
+                    rounded-xl
+                    bg-gradient-to-br
+                    from-blue-500
+                    to-purple-500
+                    flex items-center
+                    justify-center
+                    text-white
+                    font-bold
+                ">
+                    A
+                </div>
+
+                <div class="min-w-0">
+
+                    <div id="adminName"
+                         class="
+                             font-semibold
+                             truncate
+                         ">
+                        Administrator
+                    </div>
+
+                    <div id="adminEmail"
+                         class="
+                             text-xs
+                             text-gray-500
+                             dark:text-gray-400
+                             truncate
+                         ">
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="flex gap-2">
+
+            <button
+                id="themeToggleDesktop"
+                onclick="document.getElementById('themeToggle').click()"
+                class="
+                    flex-1
+                    py-2.5
+                    rounded-xl
+                    bg-white/10
+                    hover:bg-white/20
+                    transition
+                "
+            >
+                🌙 Theme
+            </button>
+
+            <button
+                onclick="document.getElementById('logoutButton').click()"
+                class="
+                    flex-1
+                    py-2.5
+                    rounded-xl
+                    bg-red-500/10
+                    text-red-400
+                    hover:bg-red-500/20
+                    transition
+                "
+            >
+                Logout
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN -->
+    <main class="
+        lg:ml-72
+        min-h-screen
+        p-4
+        sm:p-6
+        lg:p-8
+    ">
+
+        <!-- ====================================================
+             DASHBOARD
+        ===================================================== -->
+
+        <section id="dashboardPage"
+                 class="page hidden">
+
+            <div class="
+                flex
+                flex-col
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+                gap-4
+                mb-6
+            ">
+
+                <div>
+
+                    <p class="
+                        text-sm
+                        text-blue-500
+                        font-semibold
+                    ">
+                        AR SCHOOL
+                    </p>
+
+                    <h1 class="
+                        text-2xl
+                        sm:text-3xl
+                        font-black
+                        text-gray-900
+                        dark:text-white
+                    ">
+                        Dashboard
+                    </h1>
+
+                    <p class="
+                        text-sm
+                        text-gray-500
+                        dark:text-gray-400
+                        mt-1
+                    ">
+                        Overview of your school management system.
+                    </p>
+
+                </div>
+
+                <button
+                    id="refreshButton"
+                    class="
+                        self-start
+                        px-4 py-3
+                        rounded-2xl
+                        glass
+                        hover:bg-white/20
+                        transition
+                    "
+                >
+                    ↻ Refresh
+                </button>
+
+            </div>
+
+            <!-- Metrics -->
+            <div class="
+                grid
+                grid-cols-1
+                sm:grid-cols-2
+                xl:grid-cols-3
+                gap-4
+                mb-6
+            ">
+
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                ">
+
+                    <div class="
+                        flex
+                        justify-between
+                        items-start
+                    ">
+
+                        <div>
+
+                            <p class="
+                                text-sm
+                                text-gray-500
+                                dark:text-gray-400
+                            ">
+                                Total Teachers
+                            </p>
+
+                            <p id="totalTeachers"
+                               class="
+                                   text-3xl
+                                   font-black
+                                   mt-2
+                               ">
+                                —
+                            </p>
+
+                        </div>
+
+                        <div class="
+                            w-12 h-12
+                            rounded-2xl
+                            bg-blue-500/10
+                            flex items-center
+                            justify-center
+                            text-xl
+                        ">
+                            👨‍🏫
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                ">
+
+                    <div class="
+                        flex
+                        justify-between
+                        items-start
+                    ">
+
+                        <div>
+
+                            <p class="
+                                text-sm
+                                text-gray-500
+                                dark:text-gray-400
+                            ">
+                                Total Students
+                            </p>
+
+                            <p id="totalStudents"
+                               class="
+                                   text-3xl
+                                   font-black
+                                   mt-2
+                               ">
+                                —
+                            </p>
+
+                        </div>
+
+                        <div class="
+                            w-12 h-12
+                            rounded-2xl
+                            bg-purple-500/10
+                            flex items-center
+                            justify-center
+                            text-xl
+                        ">
+                            🎓
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                ">
+
+                    <div class="
+                        flex
+                        justify-between
+                        items-start
+                    ">
+
+                        <div>
+
+                            <p class="
+                                text-sm
+                                text-gray-500
+                                dark:text-gray-400
+                            ">
+                                Total Classes
+                            </p>
+
+                            <p id="totalClasses"
+                               class="
+                                   text-3xl
+                                   font-black
+                                   mt-2
+                               ">
+                                —
+                            </p>
+
+                        </div>
+
+                        <div class="
+                            w-12 h-12
+                            rounded-2xl
+                            bg-emerald-500/10
+                            flex items-center
+                            justify-center
+                            text-xl
+                        ">
+                            🏫
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Chart + Quick Info -->
+            <div class="
+                grid
+                grid-cols-1
+                xl:grid-cols-2
+                gap-5
+            ">
+
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                ">
+
+                    <h2 class="
+                        text-lg
+                        font-bold
+                        mb-4
+                    ">
+                        School Statistics
+                    </h2>
+
+                    <div class="h-72">
+
+                        <canvas id="schoolChart"></canvas>
+
+                    </div>
+
+                </div>
+
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                ">
+
+                    <h2 class="
+                        text-lg
+                        font-bold
+                        mb-4
+                    ">
+                        System Overview
+                    </h2>
+
+                    <div class="space-y-3">
+
+                        <div class="
+                            flex items-center
+                            justify-between
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <span>Teacher Registration</span>
+
+                            <span class="
+                                px-3 py-1
+                                rounded-full
+                                bg-emerald-500/10
+                                text-emerald-500
+                                text-xs
+                                font-bold
+                            ">
+                                Controlled
+                            </span>
+                        </div>
+
+                        <div class="
+                            flex items-center
+                            justify-between
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <span>Student Registration</span>
+
+                            <span class="
+                                px-3 py-1
+                                rounded-full
+                                bg-blue-500/10
+                                text-blue-500
+                                text-xs
+                                font-bold
+                            ">
+                                Controlled
+                            </span>
+                        </div>
+
+                        <div class="
+                            flex items-center
+                            justify-between
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <span>Database</span>
+
+                            <span class="
+                                px-3 py-1
+                                rounded-full
+                                bg-emerald-500/10
+                                text-emerald-500
+                                text-xs
+                                font-bold
+                            ">
+                                Firestore
+                            </span>
+                        </div>
+
+                        <div class="
+                            flex items-center
+                            justify-between
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <span>Authentication</span>
+
+                            <span class="
+                                px-3 py-1
+                                rounded-full
+                                bg-purple-500/10
+                                text-purple-500
+                                text-xs
+                                font-bold
+                            ">
+                                Firebase Auth
+                            </span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ====================================================
+             TEACHERS
+        ===================================================== -->
+
+        <section id="teachersPage"
+                 class="page hidden">
+
+            <div class="mb-6">
+
+                <p class="
+                    text-sm
+                    text-blue-500
+                    font-semibold
+                ">
+                    USER MANAGEMENT
+                </p>
+
+                <h1 class="
+                    text-2xl
+                    sm:text-3xl
+                    font-black
+                ">
+                    Teachers
+                </h1>
+
+            </div>
+
+            <div class="
+                glass
+                rounded-3xl
+                overflow-hidden
+            ">
+
+                <div class="
+                    p-5
+                    border-b
+                    border-gray-200/10
+                ">
+
+                    <h2 class="font-bold">
+                        Registered Teachers
+                    </h2>
+
+                    <p class="
+                        text-sm
+                        text-gray-500
+                        dark:text-gray-400
+                        mt-1
+                    ">
+                        View teacher accounts and details.
+                    </p>
+
+                </div>
+
+                <div class="overflow-x-auto">
+
+                    <table class="w-full min-w-[650px]">
+
+                        <thead>
+
+                            <tr class="
+                                bg-black/5
+                                dark:bg-white/5
+                                text-left
+                                text-xs
+                                uppercase
+                                tracking-wider
+                            ">
+
+                                <th class="px-4 py-3">
+                                    Teacher
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Email
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Joined
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Action
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="teacherTableBody"></tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ====================================================
+             STUDENTS
+        ===================================================== -->
+
+        <section id="studentsPage"
+                 class="page hidden">
+
+            <div class="mb-6">
+
+                <p class="
+                    text-sm
+                    text-purple-500
+                    font-semibold
+                ">
+                    USER MANAGEMENT
+                </p>
+
+                <h1 class="
+                    text-2xl
+                    sm:text-3xl
+                    font-black
+                ">
+                    Students
+                </h1>
+
+            </div>
+
+            <div class="
+                glass
+                rounded-3xl
+                overflow-hidden
+            ">
+
+                <div class="
+                    p-5
+                    border-b
+                    border-gray-200/10
+                ">
+
+                    <h2 class="font-bold">
+                        Registered Students
+                    </h2>
+
+                    <p class="
+                        text-sm
+                        text-gray-500
+                        dark:text-gray-400
+                        mt-1
+                    ">
+                        View student accounts and details.
+                    </p>
+
+                </div>
+
+                <div class="overflow-x-auto">
+
+                    <table class="w-full min-w-[650px]">
+
+                        <thead>
+
+                            <tr class="
+                                bg-black/5
+                                dark:bg-white/5
+                                text-left
+                                text-xs
+                                uppercase
+                                tracking-wider
+                            ">
+
+                                <th class="px-4 py-3">
+                                    Student
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Email
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Joined
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Action
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="studentTableBody"></tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ====================================================
+             CLASSES
+        ===================================================== -->
+
+        <section id="classesPage"
+                 class="page hidden">
+
+            <div class="mb-6">
+
+                <p class="
+                    text-sm
+                    text-emerald-500
+                    font-semibold
+                ">
+                    ACADEMICS
+                </p>
+
+                <h1 class="
+                    text-2xl
+                    sm:text-3xl
+                    font-black
+                ">
+                    Classes
+                </h1>
+
+            </div>
+
+            <div class="
+                glass
+                rounded-3xl
+                overflow-hidden
+            ">
+
+                <div class="p-5">
+
+                    <h2 class="font-bold">
+                        All Classes
+                    </h2>
+
+                    <p class="
+                        text-sm
+                        text-gray-500
+                        dark:text-gray-400
+                        mt-1
+                    ">
+                        Classes created by teachers.
+                    </p>
+
+                </div>
+
+                <div class="overflow-x-auto">
+
+                    <table class="w-full min-w-[800px]">
+
+                        <thead>
+
+                            <tr class="
+                                bg-black/5
+                                dark:bg-white/5
+                                text-left
+                                text-xs
+                                uppercase
+                                tracking-wider
+                            ">
+
+                                <th class="px-4 py-3">
+                                    Class
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Subject
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Teacher
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Join Code
+                                </th>
+
+                                <th class="px-4 py-3">
+                                    Created
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="classTableBody"></tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ====================================================
+             SETTINGS
+        ===================================================== -->
+
+        <section id="settingsPage"
+                 class="page hidden">
+
+            <div class="mb-6">
+
+                <p class="
+                    text-sm
+                    text-blue-500
+                    font-semibold
+                ">
+                    CONFIGURATION
+                </p>
+
+                <h1 class="
+                    text-2xl
+                    sm:text-3xl
+                    font-black
+                ">
+                    Settings
+                </h1>
+
+                <p class="
+                    text-sm
+                    text-gray-500
+                    dark:text-gray-400
+                    mt-1
+                ">
+                    Control registration and system behavior.
+                </p>
+
+            </div>
+
+            <div class="
+                max-w-3xl
+                space-y-4
+            ">
+
+                <!-- Teacher Registration -->
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                    flex
+                    items-center
+                    justify-between
+                    gap-4
+                ">
+
+                    <div>
+
+                        <h2 class="font-bold">
+                            Teacher Registration
+                        </h2>
+
+                        <p class="
+                            text-sm
+                            text-gray-500
+                            dark:text-gray-400
+                            mt-1
+                        ">
+                            Allow new teachers to create accounts.
+                        </p>
+
+                    </div>
+
+                    <label class="
+                        relative
+                        inline-flex
+                        items-center
+                        cursor-pointer
+                        shrink-0
+                    ">
+
+                        <input
+                            id="teacherRegistrationToggle"
+                            type="checkbox"
+                            class="sr-only peer"
+                        >
+
+                        <div class="
+                            w-12 h-7
+                            bg-gray-300
+                            peer-focus:outline-none
+                            rounded-full
+                            peer
+                            dark:bg-gray-700
+                            peer-checked:bg-blue-600
+                            after:content-['']
+                            after:absolute
+                            after:top-[2px]
+                            after:left-[2px]
+                            after:bg-white
+                            after:rounded-full
+                            after:h-6
+                            after:w-6
+                            after:transition-all
+                            peer-checked:after:translate-x-5
+                        ">
+                        </div>
+
+                    </label>
+
+                </div>
+
+
+                <!-- Student Registration -->
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                    flex
+                    items-center
+                    justify-between
+                    gap-4
+                ">
+
+                    <div>
+
+                        <h2 class="font-bold">
+                            Student Registration
+                        </h2>
+
+                        <p class="
+                            text-sm
+                            text-gray-500
+                            dark:text-gray-400
+                            mt-1
+                        ">
+                            Allow new students to create accounts.
+                        </p>
+
+                    </div>
+
+                    <label class="
+                        relative
+                        inline-flex
+                        items-center
+                        cursor-pointer
+                        shrink-0
+                    ">
+
+                        <input
+                            id="studentRegistrationToggle"
+                            type="checkbox"
+                            class="sr-only peer"
+                        >
+
+                        <div class="
+                            w-12 h-7
+                            bg-gray-300
+                            peer-focus:outline-none
+                            rounded-full
+                            peer
+                            dark:bg-gray-700
+                            peer-checked:bg-purple-600
+                            after:content-['']
+                            after:absolute
+                            after:top-[2px]
+                            after:left-[2px]
+                            after:bg-white
+                            after:rounded-full
+                            after:h-6
+                            after:w-6
+                            after:transition-all
+                            peer-checked:after:translate-x-5
+                        ">
+                        </div>
+
+                    </label>
+
+                </div>
+
+
+                <!-- Architecture -->
+                <div class="
+                    glass
+                    rounded-3xl
+                    p-5
+                ">
+
+                    <h2 class="
+                        font-bold
+                        mb-4
+                    ">
+                        System Architecture
+                    </h2>
+
+                    <div class="grid sm:grid-cols-2 gap-3">
+
+                        <div class="
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <div class="text-2xl mb-2">
+                                🔐
+                            </div>
+
+                            <div class="font-semibold">
+                                Firebase Authentication
+                            </div>
+
+                            <div class="
+                                text-xs
+                                text-gray-500
+                                dark:text-gray-400
+                                mt-1
+                            ">
+                                Secure account authentication
+                            </div>
+                        </div>
+
+                        <div class="
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <div class="text-2xl mb-2">
+                                🗄️
+                            </div>
+
+                            <div class="font-semibold">
+                                Firestore
+                            </div>
+
+                            <div class="
+                                text-xs
+                                text-gray-500
+                                dark:text-gray-400
+                                mt-1
+                            ">
+                                Cloud database
+                            </div>
+                        </div>
+
+                        <div class="
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <div class="text-2xl mb-2">
+                                ☁️
+                            </div>
+
+                            <div class="font-semibold">
+                                Cloudinary
+                            </div>
+
+                            <div class="
+                                text-xs
+                                text-gray-500
+                                dark:text-gray-400
+                                mt-1
+                            ">
+                                Browser-based file storage
+                            </div>
+                        </div>
+
+                        <div class="
+                            p-4
+                            rounded-2xl
+                            bg-white/5
+                        ">
+                            <div class="text-2xl mb-2">
+                                📱
+                            </div>
+
+                            <div class="font-semibold">
+                                Mobile First
+                            </div>
+
+                            <div class="
+                                text-xs
+                                text-gray-500
+                                dark:text-gray-400
+                                mt-1
+                            ">
+                                Responsive application interface
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<!-- ============================================================
+     USER DETAIL MODAL
+============================================================ -->
+
+<div id="userModal"
+     class="
+         hidden
+         fixed inset-0
+         z-[200]
+         bg-black/50
+         backdrop-blur-sm
+         p-4
+         flex items-center
+         justify-center
+     ">
+
+    <div class="
+        glass
+        rounded-[2rem]
+        w-full
+        max-w-md
+        p-6
+        shadow-2xl
+    ">
+
+        <div class="
+            flex
+            items-center
+            justify-between
+            mb-6
+        ">
+
+            <h2 class="
+                text-xl
+                font-bold
+            ">
+                User Details
+            </h2>
+
+            <button
+                id="closeUserModal"
+                class="
+                    w-9 h-9
+                    rounded-xl
+                    bg-white/10
+                    hover:bg-white/20
+                "
+            >
+                ×
+            </button>
+
+        </div>
+
+        <div class="space-y-3">
+
+            <div class="
+                p-4
+                rounded-2xl
+                bg-white/5
+            ">
+
+                <div class="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                ">
+                    Name
+                </div>
+
+                <div id="userModalName"
+                     class="font-semibold mt-1">
+                </div>
+
+            </div>
+
+            <div class="
+                p-4
+                rounded-2xl
+                bg-white/5
+            ">
+
+                <div class="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                ">
+                    Email
+                </div>
+
+                <div id="userModalEmail"
+                     class="font-semibold mt-1 break-all">
+                </div>
+
+            </div>
+
+            <div class="
+                p-4
+                rounded-2xl
+                bg-white/5
+            ">
+
+                <div class="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                ">
+                    Role
+                </div>
+
+                <div id="userModalRole"
+                     class="font-semibold mt-1 capitalize">
+                </div>
+
+            </div>
+
+            <div class="
+                p-4
+                rounded-2xl
+                bg-white/5
+            ">
+
+                <div class="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                ">
+                    User ID
+                </div>
+
+                <div id="userModalUID"
+                     class="
+                         font-mono
+                         text-xs
+                         mt-1
+                         break-all
+                     ">
+                </div>
+
+            </div>
+
+            <div class="
+                p-4
+                rounded-2xl
+                bg-white/5
+            ">
+
+                <div class="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                ">
+                    Created
+                </div>
+
+                <div id="userModalCreated"
+                     class="font-semibold mt-1">
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ============================================================
+     LOADING OVERLAY
+============================================================ -->
+
+<div id="loadingOverlay"
+     class="
+         hidden
+         fixed inset-0
+         z-[300]
+         bg-black/30
+         backdrop-blur-sm
+         items-center
+         justify-center
+     ">
+
+    <div class="
+        glass
+        rounded-3xl
+        p-7
+        flex
+        flex-col
+        items-center
+        gap-4
+    ">
+
+        <div class="
+            w-12 h-12
+            border-4
+            border-blue-500/20
+            border-t-blue-500
+            rounded-full
+            animate-spin
+        ">
+        </div>
+
+        <div class="
+            text-sm
+            font-semibold
+        ">
+            Loading AR School...
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+    /*
+     * The mobile theme button and desktop theme button use
+     * the same theme state.
+     */
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        () => {
+
+            const observer =
+                new MutationObserver(() => {
+
+                    const dark =
+                        document.documentElement
+                            .classList
+                            .contains("dark");
+
+                    const icon =
+                        document.getElementById(
+                            "themeIcon"
+                        );
+
+                    if (icon) {
+                        icon.textContent =
+                            dark ? "☀️" : "🌙";
+                    }
+
+                });
+
+            observer.observe(
+                document.documentElement,
+                {
+                    attributes: true,
+                    attributeFilter: ["class"]
+                }
+            );
+
+        }
+    );
+
+</script>
+
+</body>
+</html>
+

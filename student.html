@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PK School — Student Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: "class", theme: { extend: { fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui"] } } } };</script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: radial-gradient(circle at top left, rgba(99,102,241,.16), transparent 32%), radial-gradient(circle at bottom right, rgba(14,165,233,.14), transparent 30%), #f8fafc; }
+    .dark body { background: radial-gradient(circle at top left, rgba(99,102,241,.18), transparent 32%), radial-gradient(circle at bottom right, rgba(14,165,233,.12), transparent 30%), #020617; }
+    .glass { background: rgba(255,255,255,.72); backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.55); box-shadow: 0 15px 40px rgba(15,23,42,.08); }
+    .dark .glass { background: rgba(15,23,42,.70); border-color: rgba(255,255,255,.08); box-shadow: 0 15px 40px rgba(0,0,0,.25); }
+    .smooth { transition: all .25s ease; } .smooth:hover { transform: translateY(-2px); }
+    .nav-active { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white !important; box-shadow: 0 8px 20px rgba(79,70,229,.25); }
+    .modal-backdrop { background: rgba(2,6,23,.62); backdrop-filter: blur(8px); }
+    .spinner { width: 40px; height: 40px; border: 4px solid rgba(99,102,241,.18); border-top-color: #6366f1; border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-in { animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    input, textarea, select { outline: none; }
+    ::-webkit-scrollbar { width: 7px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 20px; }
+    .dark ::-webkit-scrollbar-thumb { background: #334155; }
+  </style>
+</head>
+<body class="text-slate-800 dark:text-slate-100">
+
+  <div id="loadingScreen" class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950"><div class="text-center"><div class="spinner mx-auto"></div><p class="mt-4 font-semibold">Loading PK School...</p></div></div>
+  <div id="toast" class="fixed top-5 right-5 z-[110] hidden max-w-sm rounded-2xl px-5 py-4 text-sm font-semibold shadow-2xl"></div>
+
+  <!-- AUTH -->
+  <section id="authScreen" class="hidden min-h-screen p-5">
+    <div class="min-h-[calc(100vh-40px)] flex items-center justify-center">
+      <div class="w-full max-w-md">
+        <div class="text-center mb-7">
+          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-600 to-violet-600 text-2xl font-black text-white shadow-xl">PK</div>
+          <h1 class="text-3xl font-black">PK School</h1><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Student Learning Portal</p>
+        </div>
+
+        <div class="glass rounded-[2rem] p-6 sm:p-8">
+          <div class="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-800">
+            <button id="loginTab" onclick="switchAuth('login')" class="rounded-xl bg-white px-4 py-3 text-sm font-bold shadow-sm dark:bg-slate-700">Login</button>
+            <button id="registerTab" onclick="switchAuth('register')" class="rounded-xl px-4 py-3 text-sm font-bold text-slate-500 dark:text-slate-400">Register</button>
+          </div>
+          <form id="loginForm" class="mt-6 space-y-4">
+            <div><label class="mb-2 block text-sm font-bold">Email</label><input id="loginEmail" type="email" required class="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80" placeholder="student@example.com"></div>
+            <div><label class="mb-2 block text-sm font-bold">Password</label><input id="loginPassword" type="password" required class="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80" placeholder="••••••••"></div>
+            <button id="loginBtn" class="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 font-bold text-white shadow-lg shadow-indigo-500/20">Login</button>
+          </form>
+          <form id="registerForm" class="mt-6 hidden space-y-4">
+            <div><label class="mb-2 block text-sm font-bold">Full Name</label><input id="registerName" type="text" required class="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80" placeholder="Your full name"></div>
+            <div><label class="mb-2 block text-sm font-bold">Email</label><input id="registerEmail" type="email" required class="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80" placeholder="student@example.com"></div>
+            <div><label class="mb-2 block text-sm font-bold">Password</label><input id="registerPassword" type="password" minlength="6" required class="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80" placeholder="Minimum 6 characters"></div>
+            <button id="registerBtn" class="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 font-bold text-white shadow-lg shadow-indigo-500/20">Create Student Account</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <section id="appScreen" class="hidden min-h-screen">
+    <aside class="fixed left-0 top-0 hidden h-screen w-72 p-4 lg:block">
+      <div class="glass flex h-full flex-col rounded-[2rem] p-4">
+        <div class="flex items-center gap-3 px-3 py-4">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 font-black text-white">PK</div>
+          <div><h1 class="font-black">PK School</h1><p class="text-xs text-slate-500 dark:text-slate-400">Student Portal</p></div>
+        </div>
+        <nav class="mt-6 space-y-2">
+          <button data-page="dashboard" onclick="showPage('dashboard')" class="nav-btn nav-active flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-bold">🏠 Dashboard</button>
+          <button data-page="classes" onclick="showPage('classes')" class="nav-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-bold text-slate-600 dark:text-slate-300">📚 My Classes</button>
+          <button data-page="assignments" onclick="showPage('assignments')" class="nav-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-bold text-slate-600 dark:text-slate-300">📝 Assignments</button>
+          <button data-page="notes" onclick="showPage('notes')" class="nav-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-bold text-slate-600 dark:text-slate-300">📘 Study Notes</button>
+          <button data-page="attendance" onclick="showPage('attendance')" class="nav-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-bold text-slate-600 dark:text-slate-300">⏱️ Attendance</button>
+        </nav>
+        <div class="mt-auto">
+          <div class="mb-3 rounded-2xl bg-slate-100 p-3 dark:bg-slate-800"><p class="text-xs text-slate-500">Logged in as</p><p id="sidebarName" class="truncate font-bold"></p></div>
+          <button onclick="toggleTheme()" class="mb-2 flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-bold hover:bg-slate-100 dark:hover:bg-slate-800">🌙 <span>Toggle Theme</span></button>
+          <button onclick="logout()" class="flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20">🚪 Logout</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="min-h-screen lg:ml-72">
+      <header class="sticky top-0 z-30 p-4 sm:p-6">
+        <div class="glass flex items-center justify-between rounded-3xl px-4 py-3 sm:px-5">
+          <div><p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Welcome back</p><h2 id="headerName" class="text-lg font-black sm:text-xl">Student</h2></div>
+          <div class="flex items-center gap-2">
+            <button onclick="toggleTheme()" class="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">🌓</button>
+            <button onclick="openJoinModal()" class="rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-lg">+ Join Class</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="px-4 pb-28 sm:px-6">
+        <!-- DASHBOARD -->
+        <section id="page-dashboard" class="page fade-in">
+          <div class="mb-6"><h3 class="text-2xl font-black">Dashboard</h3><p class="text-sm text-slate-500 dark:text-slate-400">Track your classes, assignments, and attendance.</p></div>
+          <div class="grid grid-cols-2 gap-4 xl:grid-cols-5">
+            <div class="glass smooth rounded-3xl p-5"><div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-950">📚</div><p class="text-sm text-slate-500">Classes</p><p id="statClasses" class="mt-1 text-3xl font-black">0</p></div>
+            <div class="glass smooth rounded-3xl p-5"><div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-950">📝</div><p class="text-sm text-slate-500">Assignments</p><p id="statAssignments" class="mt-1 text-3xl font-black">0</p></div>
+            <div class="glass smooth rounded-3xl p-5"><div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-950">⏰</div><p class="text-sm text-slate-500">Upcoming</p><p id="statUpcoming" class="mt-1 text-3xl font-black">0</p></div>
+            <div class="glass smooth rounded-3xl p-5"><div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 dark:bg-violet-950">📘</div><p class="text-sm text-slate-500">Study Notes</p><p id="statNotes" class="mt-1 text-3xl font-black">0</p></div>
+            <div class="glass smooth rounded-3xl p-5 col-span-2 xl:col-span-1"><div class="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-950">⏱️</div><p class="text-sm text-slate-500">Overall Attendance</p><p id="statAttendance" class="mt-1 text-3xl font-black text-orange-500">0%</p></div>
+          </div>
+          <div class="mt-7">
+            <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-black">Upcoming Assignments</h3><button onclick="showPage('assignments')" class="text-sm font-bold text-indigo-600">View all</button></div>
+            <div id="dashboardAssignments" class="grid gap-4 md:grid-cols-2"></div>
+          </div>
+          <div class="mt-7">
+            <div class="mb-4 flex items-center justify-between"><h3 class="text-lg font-black">My Classes</h3><button onclick="showPage('classes')" class="text-sm font-bold text-indigo-600">View all</button></div>
+            <div id="dashboardClasses" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
+          </div>
+        </section>
+
+        <!-- CLASSES -->
+        <section id="page-classes" class="page hidden fade-in">
+          <div class="mb-6 flex items-center justify-between gap-3">
+            <div><h3 class="text-2xl font-black">My Classes</h3><p class="text-sm text-slate-500 dark:text-slate-400">Classes you have joined.</p></div>
+            <button onclick="openJoinModal()" class="rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white">+ Join</button>
+          </div>
+          <div id="classesGrid" class="grid gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+
+        <!-- ASSIGNMENTS -->
+        <section id="page-assignments" class="page hidden fade-in">
+          <div class="mb-6"><h3 class="text-2xl font-black">Assignments</h3><p class="text-sm text-slate-500 dark:text-slate-400">Complete and submit your class work.</p></div>
+          <div class="mb-5 flex flex-wrap gap-2">
+            <button onclick="filterAssignments('all')" class="assignment-filter rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">All</button>
+            <button onclick="filterAssignments('pending')" class="assignment-filter rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold dark:bg-slate-800">Pending</button>
+            <button onclick="filterAssignments('submitted')" class="assignment-filter rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold dark:bg-slate-800">Submitted</button>
+          </div>
+          <div id="assignmentsList" class="space-y-4"></div>
+        </section>
+
+        <!-- NOTES -->
+        <section id="page-notes" class="page hidden fade-in">
+          <div class="mb-6"><p class="text-sm font-semibold text-emerald-500">STUDY MATERIAL</p><h3 class="text-2xl font-black">Class Notes</h3></div>
+          <div id="notesGrid" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+
+        <!-- ATTENDANCE -->
+        <section id="page-attendance" class="page hidden fade-in">
+          <div class="mb-6"><p class="text-sm font-semibold text-orange-500">RECORD</p><h3 class="text-2xl font-black">My Attendance</h3><p class="text-sm text-slate-500">View your attendance record directly from the teacher's ledger.</p></div>
+
+          <div class="glass rounded-3xl p-5 md:p-8">
+            <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div class="flex-1">
+                <label class="mb-2 block text-sm font-bold">Filter by Class</label>
+                <select id="attendanceClassFilter" class="input w-full md:max-w-xs" onchange="renderAttendance()"><option value="all">All Classes</option></select>
+              </div>
+              <div class="text-right">
+                <p class="text-xs text-slate-500">Filtered Percentage</p>
+                <p id="attendancePercentageDisplay" class="text-3xl font-black text-orange-500">0%</p>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl bg-white/50 dark:bg-slate-900/50">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr class="border-b border-slate-200 dark:border-slate-700">
+                    <th class="p-4 font-bold text-slate-500">Date & Day</th>
+                    <th class="p-4 font-bold text-slate-500">Class & Course</th>
+                    <th class="p-4 font-bold text-slate-500">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="attendanceTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <nav class="fixed bottom-4 left-4 right-4 z-40 lg:hidden">
+      <div class="glass flex items-center justify-around rounded-3xl p-2">
+        <button data-page="dashboard" onclick="showPage('dashboard')" class="mobile-nav nav-active flex flex-1 flex-col items-center rounded-2xl py-2 text-[10px] font-bold"><span class="text-lg">🏠</span> Home</button>
+        <button data-page="classes" onclick="showPage('classes')" class="mobile-nav flex flex-1 flex-col items-center rounded-2xl py-2 text-[10px] font-bold"><span class="text-lg">📚</span> Classes</button>
+        <button data-page="assignments" onclick="showPage('assignments')" class="mobile-nav flex flex-1 flex-col items-center rounded-2xl py-2 text-[10px] font-bold"><span class="text-lg">📝</span> Tasks</button>
+        <button data-page="notes" onclick="showPage('notes')" class="mobile-nav flex flex-1 flex-col items-center rounded-2xl py-2 text-[10px] font-bold"><span class="text-lg">📘</span> Notes</button>
+        <button data-page="attendance" onclick="showPage('attendance')" class="mobile-nav flex flex-1 flex-col items-center rounded-2xl py-2 text-[10px] font-bold"><span class="text-lg">⏱️</span> Attd.</button>
+      </div>
+    </nav>
+  </section>
+
+  <!-- MODALS -->
+  <div id="joinModal" class="modal-backdrop fixed inset-0 z-[90] hidden items-center justify-center p-4">
+    <div class="glass w-full max-w-md rounded-[2rem] p-6 fade-in">
+      <div class="mb-5 flex items-center justify-between"><div><h3 class="text-xl font-black">Join a Class</h3><p class="text-sm text-slate-500">Enter your teacher's join code.</p></div><button onclick="closeJoinModal()" class="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800">✕</button></div>
+      <form id="joinForm" class="space-y-4">
+        <div><label class="mb-2 block text-sm font-bold">6-Character Join Code</label><input id="joinCode" maxlength="6" minlength="6" required autocomplete="off" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-center text-xl font-black uppercase tracking-[.4em] dark:border-slate-700 dark:bg-slate-900" placeholder="ABC123"></div>
+        <button id="joinBtn" class="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 py-4 font-bold text-white">Join Class</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="assignmentModal" class="modal-backdrop fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto p-4">
+    <div class="glass my-8 w-full max-w-2xl rounded-[2rem] p-6 fade-in">
+      <div class="mb-6 flex items-start justify-between gap-4">
+        <div><p id="assignmentClass" class="text-sm font-bold text-indigo-600"></p><h3 id="assignmentTitle" class="mt-1 text-2xl font-black"></h3><p id="assignmentDue" class="mt-1 text-sm text-slate-500"></p></div>
+        <button onclick="closeAssignmentModal()" class="h-10 w-10 shrink-0 rounded-xl bg-slate-100 dark:bg-slate-800">✕</button>
+      </div>
+      <div class="rounded-2xl bg-slate-100 p-4 dark:bg-slate-800"><p class="mb-2 text-sm font-bold">Description</p><p id="assignmentDescription" class="whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300"></p></div>
+      <div class="mt-4 flex items-center justify-between"><span id="assignmentPoints" class="rounded-xl bg-indigo-100 px-3 py-2 text-sm font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"></span><a id="assignmentAttachment" href="#" target="_blank" class="hidden rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold dark:bg-slate-800">📎 Attachment</a></div>
+      
+      <div id="submissionArea" class="mt-6">
+        <div id="alreadySubmitted" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/30">
+          <p class="font-black text-emerald-700 dark:text-emerald-300">✓ Work Submitted</p>
+          <p id="submittedDate" class="mt-1 text-sm text-emerald-600 dark:text-emerald-400"></p>
+          <a id="submittedFile" href="#" target="_blank" class="mt-3 inline-block text-sm font-bold text-indigo-600">View submitted file →</a>
+        </div>
+        <form id="submissionForm" class="space-y-4">
+          <div><label class="mb-2 block text-sm font-bold">Upload Your Work</label><input id="submissionFile" type="file" required class="w-full rounded-2xl border border-dashed border-slate-300 bg-white/70 p-4 text-sm dark:border-slate-600 dark:bg-slate-900/70"><p class="mt-2 text-xs text-slate-500">Images, PDF, DOC, ZIP and other supported files can be uploaded.</p></div>
+          <button id="submitWorkBtn" class="w-full rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 py-4 font-bold text-white">📤 Submit Work</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCginB8GaT97rj1kZvAOq5Z-bGi_ZP8I6g",
+      authDomain: "school-management-927ee.firebaseapp.com",
+      projectId: "school-management-927ee",
+      storageBucket: "school-management-927ee.firebasestorage.app",
+      messagingSenderId: "786066553290",
+      appId: "1:786066553290:web:8cff2257695a59574eb733"
+    };
+
+    const appName = "ARStudentApp";
+    const app = getApps().find(a => a.name === appName) || initializeApp(firebaseConfig, appName);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const CLOUD_NAME = "sp9fu3b1"; const UPLOAD_PRESET = "ml_default";
+
+    async function uploadToCloudinary(file) {
+      if (!file) throw new Error("No file selected.");
+      const formData = new FormData(); formData.append("file", file); formData.append("upload_preset", UPLOAD_PRESET);
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
+      if (!response.ok) throw new Error("Cloudinary upload failed.");
+      const data = await response.json(); if (!data.secure_url) throw new Error("Cloudinary did not return a secure URL.");
+      return data.secure_url;
+    }
+
+    let currentUser = null; let studentProfile = null;
+    let enrolledClasses = []; let assignments = []; let submissions = []; let notes = []; let attendanceRecords = [];
+    let selectedAssignment = null; let currentAssignmentFilter = "all";
+
+    const loadingScreen = document.getElementById("loadingScreen"); const authScreen = document.getElementById("authScreen"); const appScreen = document.getElementById("appScreen");
+    function $(id) { return document.getElementById(id); }
+    function showLoading(show = true) { loadingScreen.classList.toggle("hidden", !show); }
+    function escapeHTML(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+
+    function formatDate(value) {
+      if (!value) return "No due date"; let date; if (typeof value === "string") date = new Date(value); else if (value?.toDate) date = value.toDate(); else date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "No due date"; return date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+    }
+
+    function getDueDate(assignment) {
+      if (!assignment?.dueDate) return null; if (assignment.dueDate?.toDate) return assignment.dueDate.toDate();
+      const date = new Date(assignment.dueDate); return Number.isNaN(date.getTime()) ? null : date;
+    }
+    function isUpcoming(assignment) { const due = getDueDate(assignment); return due && due.getTime() >= Date.now(); }
+
+    function toast(message, type = "success") {
+      const box = $("toast"); box.textContent = message;
+      box.className = "fixed top-5 right-5 z-[110] max-w-sm rounded-2xl px-5 py-4 text-sm font-semibold shadow-2xl " + (type === "error" ? "bg-red-600 text-white" : "bg-emerald-600 text-white");
+      box.classList.remove("hidden"); setTimeout(() => box.classList.add("hidden"), 3500);
+    }
+
+    function applyTheme() { const theme = localStorage.getItem("arSchoolTheme") || "light"; document.documentElement.classList.toggle("dark", theme === "dark"); }
+    window.toggleTheme = function() { const isDark = document.documentElement.classList.contains("dark"); localStorage.setItem("arSchoolTheme", isDark ? "light" : "dark"); applyTheme(); };
+    applyTheme();
+
+    window.switchAuth = function(mode) {
+      const login = mode === "login";
+      $("loginForm").classList.toggle("hidden", !login); $("registerForm").classList.toggle("hidden", login);
+      $("loginTab").className = login ? "rounded-xl bg-white px-4 py-3 text-sm font-bold shadow-sm dark:bg-slate-700" : "rounded-xl px-4 py-3 text-sm font-bold text-slate-500 dark:text-slate-400";
+      $("registerTab").className = !login ? "rounded-xl bg-white px-4 py-3 text-sm font-bold shadow-sm dark:bg-slate-700" : "rounded-xl px-4 py-3 text-sm font-bold text-slate-500 dark:text-slate-400";
+    };
+
+    $("registerForm").addEventListener("submit", async e => {
+      e.preventDefault(); const btn = $("registerBtn");
+      try {
+        btn.disabled = true; btn.textContent = "Creating account...";
+        const name = $("registerName").value.trim(); const email = $("registerEmail").value.trim(); const password = $("registerPassword").value;
+        const credential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, "users", credential.user.uid), { uid: credential.user.uid, name, email, role: "student", createdAt: serverTimestamp() });
+        toast("Account created successfully. Loading profile...");
+      } catch (error) { toast(error.message || "Registration failed.", "error"); } finally { btn.disabled = false; btn.textContent = "Create Student Account"; }
+    });
+
+    $("loginForm").addEventListener("submit", async e => {
+      e.preventDefault(); const btn = $("loginBtn");
+      try {
+        btn.disabled = true; btn.textContent = "Signing in...";
+        await signInWithEmailAndPassword(auth, $("loginEmail").value.trim(), $("loginPassword").value);
+      } catch (error) { toast("Login failed.", "error"); } finally { btn.disabled = false; btn.textContent = "Login"; }
+    });
+
+    onAuthStateChanged(auth, async user => {
+      showLoading(true);
+      if (!user) { currentUser = null; studentProfile = null; appScreen.classList.add("hidden"); authScreen.classList.remove("hidden"); showLoading(false); return; }
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (!snap.exists() || snap.data().role !== "student") { await signOut(auth); throw new Error("Access Denied: Not a registered student."); }
+        currentUser = user; studentProfile = snap.data();
+        authScreen.classList.add("hidden"); appScreen.classList.remove("hidden");
+        $("headerName").textContent = studentProfile.name || "Student"; $("sidebarName").textContent = studentProfile.name || "Student";
+        await loadAllData(); showPage("dashboard");
+      } catch (error) { authScreen.classList.remove("hidden"); appScreen.classList.add("hidden"); toast(error.message, "error"); } finally { showLoading(false); }
+    });
+
+    async function loadAllData() {
+      showLoading(true);
+      try {
+        enrolledClasses = []; assignments = []; submissions = []; notes = []; attendanceRecords = [];
+        
+        const qE = query(collection(db, "enrollments"), where("studentId", "==", currentUser.uid));
+        const snapE = await getDocs(qE);
+        for (const eDoc of snapE.docs) {
+          const eData = eDoc.data(); if (!eData.classId) continue;
+          const cSnap = await getDoc(doc(db, "classes", eData.classId));
+          if (cSnap.exists()) {
+             enrolledClasses.push({ ...cSnap.data(), id: cSnap.id, classId: cSnap.id, enrollmentId: eDoc.id, enrolledAt: eData.enrolledAt });
+          }
+        }
+
+        const seenA = new Set(); const seenN = new Set();
+        for (const cls of enrolledClasses) {
+          const qA = query(collection(db, "assignments"), where("classId", "==", cls.classId));
+          (await getDocs(qA)).forEach(d => { if (!seenA.has(d.id)) { seenA.add(d.id); assignments.push({ ...d.data(), id: d.id }); } });
+
+          const qN = query(collection(db, "notes"), where("classId", "==", cls.classId));
+          (await getDocs(qN)).forEach(d => { if (!seenN.has(d.id)) { seenN.add(d.id); notes.push({ ...d.data(), id: d.id }); } });
+
+          const qAtt = query(collection(db, "attendance"), where("classId", "==", cls.classId));
+          (await getDocs(qAtt)).forEach(d => attendanceRecords.push({ ...d.data(), id: d.id }));
+        }
+        assignments.sort((a, b) => (getDueDate(a)?.getTime() || Infinity) - (getDueDate(b)?.getTime() || Infinity));
+        attendanceRecords.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+        const qS = query(collection(db, "submissions"), where("studentId", "==", currentUser.uid));
+        (await getDocs(qS)).forEach(d => submissions.push({ ...d.data(), id: d.id }));
+
+        populateFilters(); updateDashboard(); renderClasses(); renderAssignments(); renderNotes(); renderAttendance();
+      } catch (error) { console.error(error); toast("Data load error.", "error"); } finally { showLoading(false); }
+    }
+
+    function getSubmission(assignmentId) { return submissions.find(s => s.assignmentId === assignmentId); }
+
+    function populateFilters() {
+      $("attendanceClassFilter").innerHTML = `<option value="all">All Classes</option>` + enrolledClasses.map(c => `<option value="${c.classId}">${escapeHTML(c.className)}</option>`).join("");
+    }
+
+    function updateDashboard() {
+      const upcoming = assignments.filter(isUpcoming);
+      $("statClasses").textContent = enrolledClasses.length; $("statAssignments").textContent = assignments.length;
+      $("statUpcoming").textContent = upcoming.length; $("statNotes").textContent = notes.length;
+
+      let totalMarked = 0; let totalPresent = 0;
+      attendanceRecords.forEach(att => {
+        if (att.records && att.records[currentUser.uid]) {
+           totalMarked++;
+           if (att.records[currentUser.uid] === "present") totalPresent++;
+        }
+      });
+      const pct = totalMarked > 0 ? Math.round((totalPresent/totalMarked)*100) : 0;
+      $("statAttendance").textContent = `${pct}%`;
+
+      renderDashboardAssignments(upcoming.slice(0, 4)); renderDashboardClasses(enrolledClasses.slice(0, 3));
+    }
+
+    function renderDashboardAssignments(items) {
+      const box = $("dashboardAssignments");
+      if (!items.length) { box.innerHTML = `<div class="glass rounded-3xl p-7 text-center sm:col-span-2"><div class="text-4xl">🎉</div><h4 class="mt-3 font-black">No upcoming assignments</h4></div>`; return; }
+      box.innerHTML = items.map(a => {
+        const submission = getSubmission(a.id);
+        return `
+          <div class="glass smooth rounded-3xl p-5">
+            <div class="flex items-start justify-between gap-3"><div><p class="text-xs font-bold uppercase tracking-wide text-indigo-600">${escapeHTML(a.className)}</p><h4 class="mt-1 font-black">${escapeHTML(a.title)}</h4></div>${submission ? `<span class="rounded-xl bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Submitted</span>` : `<span class="rounded-xl bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">Pending</span>`}</div>
+            <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">⏰ ${formatDate(a.dueDate)}</p>
+            <button onclick="openAssignment('${a.id}')" class="mt-4 w-full rounded-2xl bg-slate-100 py-3 text-sm font-bold hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">${submission ? "View Submission" : "Open Assignment"}</button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderDashboardClasses(items) {
+      const box = $("dashboardClasses");
+      if (!items.length) { box.innerHTML = `<div class="glass rounded-3xl p-7 text-center sm:col-span-2 xl:col-span-3"><div class="text-4xl">📚</div><h4 class="mt-3 font-black">No classes yet</h4></div>`; return; }
+      box.innerHTML = items.map(cls => classCard(cls)).join("");
+    }
+
+    function classCard(cls) {
+      const image = cls.bannerURL || "https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=900&q=80";
+      const assignmentCount = assignments.filter(a => a.classId === cls.classId).length;
+      return `
+        <div class="glass smooth overflow-hidden rounded-3xl">
+          <div class="relative h-36 overflow-hidden">
+            <img src="${escapeHTML(image)}" alt="Class banner" class="h-full w-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=900&q=80'">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+            <div class="absolute bottom-4 left-4 right-4"><p class="text-xs font-bold text-white/80">${escapeHTML(cls.subject || "Subject")}</p><h4 class="text-lg font-black text-white">${escapeHTML(cls.className || "Class")}</h4></div>
+          </div>
+          <div class="p-4">
+            <div class="flex items-center justify-between text-sm"><span class="text-slate-500">👨‍🏫 ${escapeHTML(cls.teacherName || "Teacher")}</span><span class="font-bold">${assignmentCount} tasks</span></div>
+            <div class="mt-4 rounded-2xl bg-slate-100 p-3 dark:bg-slate-800"><p class="text-xs text-slate-500">Join Code</p><p class="mt-1 font-black tracking-widest">${escapeHTML(cls.joinCode || "------")}</p></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderClasses() {
+      const box = $("classesGrid");
+      if (!enrolledClasses.length) { box.innerHTML = `<div class="glass rounded-3xl p-10 text-center sm:col-span-2 xl:col-span-3"><div class="text-5xl">📚</div><h3 class="mt-4 text-xl font-black">No classes joined</h3><button onclick="openJoinModal()" class="mt-5 rounded-2xl bg-indigo-600 px-5 py-3 font-bold text-white">Join Your First Class</button></div>`; return; }
+      box.innerHTML = enrolledClasses.map(classCard).join("");
+    }
+
+    function renderAssignments() {
+      const box = $("assignmentsList"); let list = [...assignments];
+      if (currentAssignmentFilter === "pending") list = list.filter(a => !getSubmission(a.id));
+      else if (currentAssignmentFilter === "submitted") list = list.filter(a => getSubmission(a.id));
+      if (!list.length) { box.innerHTML = `<div class="glass rounded-3xl p-10 text-center"><div class="text-5xl">📝</div><h3 class="mt-4 text-xl font-black">No assignments found</h3></div>`; return; }
+      box.innerHTML = list.map(a => {
+        const submission = getSubmission(a.id); const due = getDueDate(a); const overdue = due && due.getTime() < Date.now() && !submission;
+        return `
+          <div class="glass smooth rounded-3xl p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2"><span class="rounded-xl bg-indigo-100 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">${escapeHTML(a.className)}</span>
+                  ${submission ? `<span class="rounded-xl bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">✓ Submitted</span>` : overdue ? `<span class="rounded-xl bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-950 dark:text-red-300">Overdue</span>` : `<span class="rounded-xl bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">Pending</span>`}
+                </div>
+                <h4 class="mt-2 truncate text-lg font-black">${escapeHTML(a.title)}</h4><p class="mt-1 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">${escapeHTML(a.description || "No description provided.")}</p>
+                <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-slate-500"><span>⏰ ${formatDate(a.dueDate)}</span><span>🏆 ${escapeHTML(a.points || 0)} points</span></div>
+              </div>
+              <button onclick="openAssignment('${a.id}')" class="shrink-0 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white">${submission ? "View" : "Submit"}</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    window.filterAssignments = function(filter) {
+      currentAssignmentFilter = filter;
+      document.querySelectorAll(".assignment-filter").forEach(btn => btn.classList.replace("bg-indigo-600", "bg-slate-100") || btn.classList.remove("text-white"));
+      event.currentTarget.classList.replace("bg-slate-100", "bg-indigo-600"); event.currentTarget.classList.add("text-white");
+      renderAssignments();
+    };
+
+    function renderNotes() {
+      const box = $("notesGrid");
+      if (!notes.length) { box.innerHTML = `<div class="glass rounded-3xl p-10 text-center sm:col-span-2 xl:col-span-3"><div class="text-5xl">📘</div><h3 class="mt-4 text-xl font-black">No Notes Available</h3></div>`; return; }
+      box.innerHTML = notes.map(n => {
+        const cls = enrolledClasses.find(c => c.classId === n.classId);
+        return `
+          <div class="glass smooth rounded-3xl p-5 flex flex-col h-full">
+             <div class="text-3xl mb-2">📚</div><p class="text-xs font-bold text-emerald-500 mb-1">${escapeHTML(cls?.className || "Class")}</p>
+             <h4 class="text-lg font-black mb-4 flex-1">${escapeHTML(n.title)}</h4>
+             <a href="${escapeHTML(n.fileURL)}" target="_blank" class="block w-full text-center rounded-xl bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400">Read / Download</a>
+          </div>
+        `;
+      }).join("");
+    }
+
+    window.renderAttendance = function() {
+      const filter = $("attendanceClassFilter").value; const box = $("attendanceTableBody");
+      let relevantRecords = []; let totalMarked = 0; let totalPresent = 0;
+
+      attendanceRecords.forEach(att => {
+        if(filter !== "all" && att.classId !== filter) return;
+        const cls = enrolledClasses.find(c => c.classId === att.classId);
+        
+        if (att.records && att.records[currentUser.uid]) {
+          const status = att.records[currentUser.uid];
+          totalMarked++;
+          if (status === "present") totalPresent++;
+
+          let formattedDate = att.date;
+          try {
+            const d = new Date(att.date);
+            if (!isNaN(d.getTime())) {
+                formattedDate = d.toLocaleDateString("en-IN", { weekday: 'long', year: 'numeric', month: 'short', day: '2-digit' });
+            }
+          } catch(e) {}
+
+          relevantRecords.push(`
+            <tr class="border-b border-white/10 hover:bg-white/5 transition">
+              <td class="p-4">
+                <div class="font-bold text-slate-800 dark:text-slate-100">${escapeHTML(formattedDate)}</div>
+              </td>
+              <td class="p-4">
+                <div class="font-bold text-indigo-600 dark:text-indigo-400">${escapeHTML(cls?.className || "Unknown Class")}</div>
+                <div class="text-xs text-slate-500 mt-1">${escapeHTML(cls?.subject || "Subject")}</div>
+              </td>
+              <td class="p-4">
+                <span class="px-3 py-1 rounded-lg text-xs font-bold ${status === 'present' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400 uppercase'}">${escapeHTML(status)}</span>
+              </td>
+            </tr>
+          `);
+        }
+      });
+      const pct = totalMarked > 0 ? Math.round((totalPresent/totalMarked)*100) : 0;
+      $("attendancePercentageDisplay").textContent = `${pct}%`;
+      box.innerHTML = !relevantRecords.length ? `<tr><td colspan="3" class="p-5 text-center text-slate-500">No attendance records found.</td></tr>` : relevantRecords.join("");
+    };
+
+    window.openAssignment = function(assignmentId) {
+      const assignment = assignments.find(a => a.id === assignmentId);
+      if (!assignment) return toast("Assignment not found.", "error");
+      selectedAssignment = assignment;
+      $("assignmentClass").textContent = assignment.className || "Class"; $("assignmentTitle").textContent = assignment.title || "Assignment"; $("assignmentDue").textContent = "Due: " + formatDate(assignment.dueDate); $("assignmentDescription").textContent = assignment.description || "No description provided."; $("assignmentPoints").textContent = `${assignment.points || 0} Points`;
+      const attachment = $("assignmentAttachment");
+      if (assignment.attachmentURL) { attachment.href = assignment.attachmentURL; attachment.classList.remove("hidden"); } else { attachment.classList.add("hidden"); }
+      const submission = getSubmission(assignment.id);
+      if (submission) {
+        $("submissionForm").classList.add("hidden"); $("alreadySubmitted").classList.remove("hidden");
+        $("submittedDate").textContent = submission.timestamp?.toDate ? "Submitted: " + formatDate(submission.timestamp) : "Submission recorded.";
+        $("submittedFile").href = submission.fileURL;
+      } else { $("submissionForm").classList.remove("hidden"); $("alreadySubmitted").classList.add("hidden"); $("submissionFile").value = ""; }
+      $("assignmentModal").classList.remove("hidden"); $("assignmentModal").classList.add("flex");
+    };
+
+    window.closeAssignmentModal = function() { $("assignmentModal").classList.add("hidden"); $("assignmentModal").classList.remove("flex"); selectedAssignment = null; };
+
+    $("submissionForm").addEventListener("submit", async e => {
+      e.preventDefault(); if (!selectedAssignment || !currentUser) return;
+      const file = $("submissionFile").files[0]; const btn = $("submitWorkBtn"); if (!file) return toast("Please select your work.", "error");
+      try {
+        btn.disabled = true; btn.textContent = "Uploading and submitting...";
+        const duplicateQuery = query(collection(db, "submissions"), where("assignmentId", "==", selectedAssignment.id), where("studentId", "==", currentUser.uid));
+        if (!(await getDocs(duplicateQuery)).empty) throw new Error("You have already submitted this assignment.");
+        const fileURL = await uploadToCloudinary(file);
+        const submissionRef = await addDoc(collection(db, "submissions"), { assignmentId: selectedAssignment.id, studentId: currentUser.uid, studentName: studentProfile.name, fileURL, fileName: file.name, classId: selectedAssignment.classId, timestamp: serverTimestamp() });
+        submissions.push({ id: submissionRef.id, assignmentId: selectedAssignment.id, studentId: currentUser.uid, fileURL, fileName: file.name, classId: selectedAssignment.classId, timestamp: { toDate: () => new Date() } });
+        toast("Assignment submitted successfully!"); closeAssignmentModal(); updateDashboard(); renderAssignments();
+      } catch (error) { toast(error.message || "Submission failed.", "error"); } finally { btn.disabled = false; btn.textContent = "📤 Submit Work"; }
+    });
+
+    window.openJoinModal = function() { $("joinCode").value = ""; $("joinModal").classList.remove("hidden"); $("joinModal").classList.add("flex"); setTimeout(() => $("joinCode").focus(), 100); };
+    window.closeJoinModal = function() { $("joinModal").classList.add("hidden"); $("joinModal").classList.remove("flex"); };
+
+    $("joinForm").addEventListener("submit", async e => {
+      e.preventDefault(); if (!currentUser) return;
+      const btn = $("joinBtn"); const code = $("joinCode").value.trim().toUpperCase();
+      if (!/^[A-Z0-9]{6}$/.test(code)) return toast("Enter a valid 6-character join code.", "error");
+      try {
+        btn.disabled = true; btn.textContent = "Checking code...";
+        const classQuery = query(collection(db, "classes"), where("joinCode", "==", code));
+        const classSnapshot = await getDocs(classQuery);
+        if (classSnapshot.empty) throw new Error("Invalid class join code.");
+        const classId = classSnapshot.docs[0].id;
+
+        const duplicateQuery = query(collection(db, "enrollments"), where("studentId", "==", currentUser.uid), where("classId", "==", classId));
+        if (!(await getDocs(duplicateQuery)).empty) throw new Error("You have already joined this class.");
+
+        const enrollmentId = `${currentUser.uid}_${classId}`;
+        await setDoc(doc(db, "enrollments", enrollmentId), { studentId: currentUser.uid, classId, joinCode: code, enrolledAt: serverTimestamp() });
+        toast(`Successfully joined!`); closeJoinModal(); await loadAllData(); showPage("classes");
+      } catch (error) { toast(error.message || "Could not join class.", "error"); } finally { btn.disabled = false; btn.textContent = "Join Class"; }
+    });
+
+    window.showPage = function(page) {
+      document.querySelectorAll(".page").forEach(section => section.classList.add("hidden"));
+      const target = document.getElementById(`page-${page}`); if (target) target.classList.remove("hidden");
+      document.querySelectorAll(".nav-btn, .mobile-nav").forEach(btn => {
+        const active = btn.dataset.page === page; btn.classList.toggle("nav-active", active);
+        if (btn.classList.contains("nav-btn") && !active) btn.classList.add("text-slate-600", "dark:text-slate-300");
+        else btn.classList.remove("text-slate-600", "dark:text-slate-300");
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    window.logout = async function() { try { await signOut(auth); toast("Logged out successfully."); } catch (error) { toast("Logout failed.", "error"); } };
+    document.addEventListener("keydown", e => { if (e.key === "Escape") { closeJoinModal(); closeAssignmentModal(); } });
+
+    switchAuth("login");
+
+  </script>
+</body>
+</html>
